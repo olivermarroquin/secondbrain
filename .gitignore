@@ -1,0 +1,11 @@
+# macOS noise (redundant with global, but good to enforce in repo)
+.DS_Store
+
+# Local/ephemeral runtime folders
+07_system/venvs/
+07_system/**/venvs/
+*.log
+
+# Secrets
+.env
+*.env
