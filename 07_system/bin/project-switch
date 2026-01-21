@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: project-switch <project_path>
+# Example: project-switch 01_projects/js-app
+#
+# What it does (in order):
+# 1) Ensures you're in the secondbrain repo root
+# 2) Refuses to switch if you have uncommitted NON-state changes (prevents losing work)
+# 3) Runs session-close (updates global LOG + forces NEXT/STATUS review)
+# 4) Sets Active project path: <project_path> in global STATUS.md (in-place)
+# 5) Initializes project state if missing (project-init-state)
+# 6) Runs session-start (shows global + project state)
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: project-switch <project_path>"
+  exit 1
+fi
+
+TARGET_PATH="$1"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
+
+if [[ ! -d "$TARGET_PATH" ]]; then
+  echo "Error: project path does not exist: $TARGET_PATH"
+  echo "Create it first, e.g.: mkdir -p \"$TARGET_PATH\""
+  exit 1
+fi
+
+GLOBAL_STATUS="07_system/state/STATUS.md"
+if [[ ! -f "$GLOBAL_STATUS" ]]; then
+  echo "Error: missing $GLOBAL_STATUS"
+  exit 1
+fi
+
+# --- Safety check: refuse switch if there are non-state changes ---
+# Allowed to be dirty ONLY in:
+# - 07_system/state/*
+# - 01_projects/*/state/*
+# Everything else must be clean before switching.
+CHANGED_FILES="$(git status --porcelain | awk '{print $2}')"
+
+if [[ -n "${CHANGED_FILES:-}" ]]; then
+  # Filter out allowed paths; anything remaining is a hard stop.
+  DISALLOWED="$(printf "%s\n" "$CHANGED_FILES" \
+    | grep -Ev '^(07_system/state/|01_projects/[^/]+/state/)' || true)"
+
+  if [[ -n "${DISALLOWED:-}" ]]; then
+    echo "Refusing to switch: you have uncommitted NON-state changes:"
+    echo
+    printf "  %s\n" $DISALLOWED
+    echo
+    echo "Do one of these, then re-run:"
+    echo "  - Commit (preferred): git add -p && git commit -m \"...\" && git push"
+    echo "  - Stash (only if necessary): git stash push -m \"wip: before switch\""
+    exit 1
+  fi
+fi
+
+echo "== Project switch =="
+echo "Target project path: $TARGET_PATH"
+echo
+
+# 1) Close current session (updates global LOG and forces NEXT/STATUS review)
+echo "== Closing current session =="
+"$REPO_ROOT/07_system/bin/session-close"
+
+# 2) Update Active project path in global STATUS.md
+echo
+echo "== Updating active project path in global STATUS =="
+if grep -qE '^Active project path:' "$GLOBAL_STATUS"; then
+  # BSD/macOS sed requires -i '' for in-place.
+  sed -i '' "s|^Active project path:.*|Active project path: $TARGET_PATH|" "$GLOBAL_STATUS"
+else
+  # Insert near the top (after the first line).
+  awk -v p="$TARGET_PATH" 'NR==1{print; print ""; print "Active project path: " p; next} {print}' \
+    "$GLOBAL_STATUS" > "$GLOBAL_STATUS.tmp" && mv "$GLOBAL_STATUS.tmp" "$GLOBAL_STATUS"
+fi
+
+echo "Active project path now:"
+grep -E '^Active project path:' "$GLOBAL_STATUS" || true
+echo
+
+# 3) Ensure project state exists
+echo "== Ensuring project state exists =="
+"$REPO_ROOT/07_system/bin/project-init-state" "$TARGET_PATH"
+echo
+
+# 4) Start new session (shows global + project state)
+echo "== Starting new session =="
+"$REPO_ROOT/07_system/bin/session-start"
+
+echo
+echo "Switch complete."
+echo "Reminder: commit/push any state changes now if needed:"
+echo "  git status -sb"
