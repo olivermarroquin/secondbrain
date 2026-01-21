@@ -1,10 +1,10 @@
 # STATUS (Global)
 
-Active project path: 01_projects/resume-factory
+Active project path: 01_projects/js-app
 
 ## Active project
-- Name: Resume Factory
-- Location: 01_projects/resume-factory
+- Name: js-app
+- Location: 01_projects/js-app
 - Current step: TBD
 
 ## Current focus
