@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
+
+echo "== Repo =="
+pwd
+echo
+
+echo "== Fetch =="
+git fetch --all --prune
+echo
+
+echo "== Status =="
+git status -sb
+echo
+
+echo "== Recent history =="
+git lg -10 || git log --oneline --decorate --graph --all -10
+echo
+
+echo "== Global STATUS.md (top) =="
+sed -n '1,200p' 07_system/state/STATUS.md
+echo
+
+echo "== Global NEXT.md (top) =="
+sed -n '1,200p' 07_system/state/NEXT.md
+echo
+
+# Optional: show project state if a single active path is provided in global STATUS.
+# Expected line format in 07_system/state/STATUS.md:
+# Active project path: 01_projects/resume-factory
+ACTIVE_PATH="$(grep -E '^Active project path:' 07_system/state/STATUS.md 2>/dev/null | head -n 1 | sed 's/^Active project path:[[:space:]]*//')"
+
+if [[ -n "${ACTIVE_PATH:-}" && "$ACTIVE_PATH" != "TBD" && -d "$ACTIVE_PATH" ]]; then
+  if [[ -d "$ACTIVE_PATH/state" ]]; then
+    echo "== Project STATUS.md (top) == [$ACTIVE_PATH]"
+    sed -n '1,200p' "$ACTIVE_PATH/state/STATUS.md" 2>/dev/null || echo "(missing $ACTIVE_PATH/state/STATUS.md)"
+    echo
+    echo "== Project NEXT.md (top) == [$ACTIVE_PATH]"
+    sed -n '1,200p' "$ACTIVE_PATH/state/NEXT.md" 2>/dev/null || echo "(missing $ACTIVE_PATH/state/NEXT.md)"
+    echo
+  else
+    echo "== Project state folder not found == [$ACTIVE_PATH/state]"
+    echo "Run: 07_system/bin/project-init-state \"$ACTIVE_PATH\""
+    echo
+  fi
+fi
+
+echo "Rule: No work begins until NEXT.md is accurate (updating NEXT is task #0)."

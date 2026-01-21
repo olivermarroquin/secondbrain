@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: project-init-state <project_path>"
+  exit 1
+fi
+
+PROJECT_PATH="$1"
+TEMPLATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../templates/project-state" && pwd)"
+
+if [[ ! -d "$PROJECT_PATH" ]]; then
+  echo "Error: project path does not exist: $PROJECT_PATH"
+  exit 1
+fi
+
+mkdir -p "$PROJECT_PATH/state"
+
+for f in STATUS.md NEXT.md DECISIONS.md LOG.md; do
+  if [[ -e "$PROJECT_PATH/state/$f" ]]; then
+    echo "Skip (exists): $PROJECT_PATH/state/$f"
+  else
+    cp "$TEMPLATE_DIR/$f" "$PROJECT_PATH/state/$f"
+    echo "Created: $PROJECT_PATH/state/$f"
+  fi
+done
+
+echo "Done."

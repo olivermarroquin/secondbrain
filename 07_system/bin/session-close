@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
+
+echo "== Session close =="
+echo
+
+DATE="$(date '+%Y-%m-%d %H:%M')"
+
+echo "Appending to 07_system/state/LOG.md ..."
+{
+echo
+echo "- Date: $DATE"
+echo "  What changed: "
+echo "  What to do next: "
+echo "  Blockers: "
+} >> 07_system/state/LOG.md
+
+echo
+echo "Update NEXT.md (task #0 rule) then STATUS.md."
+echo "Opening NEXT.md..."
+nano 07_system/state/NEXT.md
+
+echo "Opening STATUS.md..."
+nano 07_system/state/STATUS.md
+
+echo
+echo "== Git status =="
+git status -sb
+echo
+echo "Reminder:"
+echo "- If ready: git add -p && git commit -m \"...\" && git push"
+echo "- If not ready: write why in NEXT.md before stopping."
