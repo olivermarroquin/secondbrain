@@ -30,6 +30,25 @@ if [[ ! -f "$GLOBAL_NEXT" ]]; then
   exit 1
 fi
 
+# --- Auto-bootstrap: ensure project state exists ---
+"$REPO_ROOT/07_system/bin/project-init-state" "$TARGET_PATH" >/dev/null
+
+# If project has no TRACKED state files yet, require a commit boundary before switching.
+TRACKED_STATE_COUNT="$(git ls-files -- "$TARGET_PATH/state" | wc -l | tr -d ' ')"
+if [[ "$TRACKED_STATE_COUNT" -eq 0 ]]; then
+  echo "== New project detected (no tracked state yet) =="
+  echo "Initialized: $TARGET_PATH/state/"
+  echo
+  echo "Commit the project state, then re-run the switch:"
+  echo "  git add $TARGET_PATH/state"
+  echo "  git commit -m \"Initialize $(basename "$TARGET_PATH") project state\""
+  echo "  git push"
+  echo
+  echo "Then:"
+  echo "  07_system/bin/project-switch $TARGET_PATH"
+  exit 2
+fi
+
 # --- Safety: refuse switch if there are uncommitted NON-state changes ---
 CHANGED_FILES="$(git status --porcelain | awk '{print $2}')"
 if [[ -n "${CHANGED_FILES:-}" ]]; then
@@ -70,11 +89,6 @@ fi
 # Name + Location (best-effort; requires those lines exist)
 sed -i '' "s|^- Name:.*|- Name: $PROJECT_NAME|" "$GLOBAL_STATUS" || true
 sed -i '' "s|^- Location:.*|- Location: $TARGET_PATH|" "$GLOBAL_STATUS" || true
-
-# Ensure project state exists
-echo
-echo "== Ensuring project state exists =="
-"$REPO_ROOT/07_system/bin/project-init-state" "$TARGET_PATH"
 
 # Derive focus from project NEXT.md (contract: a line starting with 'Focus: ')
 PROJECT_NEXT="$TARGET_PATH/state/NEXT.md"
