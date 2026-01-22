@@ -1,8 +1,14 @@
 {
-"application_id": "randstad_digital_2026-01-22_lead-qa-automation-test-engineer",
-"current_status": "not_applied",
-"status_history": [],
-"resume_used": null,
-"cover_letter_used": null,
-"notes": ""
+  "application_id": "randstad_digital_2026-01-22_lead-qa-automation-test-engineer",
+  "current_status": "applied",
+  "status_history": [
+    {
+      "date": "2026-01-22",
+      "status": "applied",
+      "note": "Application submitted"
+    }
+  ],
+  "resume_used": null,
+  "cover_letter_used": null,
+  "notes": ""
 }
