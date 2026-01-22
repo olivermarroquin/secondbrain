@@ -1,14 +1,14 @@
 # STATUS (Global)
 
-Active project path: 01_projects/js-app
+Active project path: 01_projects/resume-factory
 
 ## Active project
-- Name: js-app
-- Location: 01_projects/js-app
+- Name: resume-factory
+- Location: 01_projects/resume-factory
 - Current step: TBD
 
 ## Current focus
-- Derived from active project Focus: in 01_projects/<active>/state/NEXT.md
+- Automate end-to-end resume tailoring, tracking, and interview prep from job descriptions
 
 ## Git + GitHub
 - Repo: secondbrain

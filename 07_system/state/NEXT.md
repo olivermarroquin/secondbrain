@@ -4,4 +4,4 @@
 - If this file is not accurate, update it first.
 
 ## Routing pointer
-- Active project NEXT: 01_projects/js-app/state/NEXT.md
+- Active project NEXT: 01_projects/resume-factory/state/NEXT.md
