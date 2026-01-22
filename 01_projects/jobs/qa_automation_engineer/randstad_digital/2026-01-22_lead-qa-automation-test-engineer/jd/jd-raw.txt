@@ -1,0 +1,120 @@
+Job Details
+Skills
+Lead QA Automation Test Engineer
+Summary
+job summary:
+
+Enterprise Healthcare client has an immediate opening for a highly motivated Lead QA Automation Test Engineer to join their dynamic and growing team. All qualified candidates are encouraged to apply!
+
+
+
+
+
+location: Telecommute
+
+job type: Contract
+
+salary: $53.85 - 63.85 per hour
+
+work hours: 8am to 5pm
+
+education: Bachelors
+
+
+
+responsibilities:
+
+Story Behind the Need:
+
+
+Our team is focused on delivering high-quality automation for the web portals and API components currently under development. Hiring new resources for upcoming scrum teams (Atlantis is breaking into three different scrum teams)
+
+
+We work in a dynamic environment and the team is both collaborative and supportive.
+
+
+This is not part of a larger hiring initiative.
+
+
+- Day to day in this role will require resource to work in agile scrum team and involves designing, executing, and documenting test cases to identify defects in software applications while collaborating with the development team to ensure the delivery of high quality products.
+
+
+- Also includes attending meetings, analyzing test results and performing regression testing.
+
+
+Performance:
+
+
+- Resource should ensure the delivery of high-quality software products through
+
+
+Candidate Requirements
+
+
+Education/Certification Required: Preferred:
+
+
+Years of experience required: 5-7 years required
+
+
+- Hands on software quality assurance testing experience required.
+
+
+- Experienced with test automation and tools utilized in the industry required.
+
+
+- Experience in writing Java script, VB Script and Script required
+
+
+- Working knowledge of version control systems such as SVN required.
+
+
+- Advanced skills in SQL data retrieval from a relational database required.
+
+
+- Knowledge of web services and API testing required.
+
+
+Disqualifiers: lacking collaboration skills, need someone who can collaborate with different teams, super vocal, ability to align goals and testing
+
+
+Additional qualities to look for: Healthcare experience and claims knowledge is a plus. Experience in agile methodology preferred.
+
+
+- Top 3 must-have hard skills stack-ranked by importance
+
+
+1 Jira, Qtest, Postman, API testing, HP ALM, REST SOAP, Selenium and Cypress, Javascript, Typescript
+
+
+
+
+
+
+
+
+qualifications:
+
+Bachelors
+
+
+
+
+Equal Opportunity Employer: Race, Color, Religion, Sex, Sexual Orientation, Gender Identity, National Origin, Age, Genetic Information, Disability, Protected Veteran Status, or any other legally protected group status.
+
+At Randstad Digital, we welcome people of all abilities and want to ensure that our hiring and interview process meets the needs of all applicants. If you require a reasonable accommodation to make your application or interview experience a great one, please contact
+
+Pay offered to a successful candidate will be based on several factors including the candidate's education, work experience, work location, specific job duties, certifications, etc. In addition, Randstad Digital offers a comprehensive benefits package, including: medical, prescription, dental, vision, AD&D, and life insurance offerings, short-term disability, and a 401K plan (all benefits are based on eligibility).
+
+This posting is open for thirty (30) days.
+
+
+It is unlawful in Massachusetts to require or administer a lie detector test as a condition of employment or continued employment. An employer who violates this law shall be subject to criminal penalties and civil liability.
+
+
+
+
+Employers have access to artificial intelligence language tools (“AI”) that help generate and enhance job descriptions and AI may have been used to create this description. The position description has been reviewed for accuracy and Dice believes it to correctly reflect the job opportunity.
+Dice Id: cxsapwma1
+Position Id: 1321308
+Posted 12 days ago
