@@ -8,7 +8,7 @@ Active project path: 01_projects/js-app
 - Current step: TBD
 
 ## Current focus
-- Define AI + Git collaboration workflow (“resume where we left off”)
+- Derived from active project Focus: in 01_projects/<active>/state/NEXT.md
 
 ## Git + GitHub
 - Repo: secondbrain

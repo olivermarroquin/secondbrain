@@ -18,12 +18,19 @@ if [[ ! -d "$TARGET_PATH" ]]; then
 fi
 
 GLOBAL_STATUS="07_system/state/STATUS.md"
+GLOBAL_NEXT="07_system/state/NEXT.md"
+
 if [[ ! -f "$GLOBAL_STATUS" ]]; then
   echo "Error: missing $GLOBAL_STATUS"
   exit 1
 fi
 
-# --- Safety check: refuse switch if there are non-state changes ---
+if [[ ! -f "$GLOBAL_NEXT" ]]; then
+  echo "Error: missing $GLOBAL_NEXT"
+  exit 1
+fi
+
+# --- Safety: refuse switch if there are uncommitted NON-state changes ---
 CHANGED_FILES="$(git status --porcelain | awk '{print $2}')"
 if [[ -n "${CHANGED_FILES:-}" ]]; then
   DISALLOWED="$(printf "%s\n" "$CHANGED_FILES" \
@@ -44,15 +51,15 @@ echo "== Project switch =="
 echo "Target project path: $TARGET_PATH"
 echo
 
+# Close current session (logs + forces review)
 echo "== Closing current session =="
 "$REPO_ROOT/07_system/bin/session-close"
 
 echo
 echo "== Updating global STATUS =="
-# Derive a default name from the folder name (last path segment)
 PROJECT_NAME="$(basename "$TARGET_PATH")"
 
-# Update machine-readable active path
+# Active project path
 if grep -qE '^Active project path:' "$GLOBAL_STATUS"; then
   sed -i '' "s|^Active project path:.*|Active project path: $TARGET_PATH|" "$GLOBAL_STATUS"
 else
@@ -60,16 +67,45 @@ else
     "$GLOBAL_STATUS" > "$GLOBAL_STATUS.tmp" && mv "$GLOBAL_STATUS.tmp" "$GLOBAL_STATUS"
 fi
 
-# Update human-readable Name and Location (best-effort; requires the lines to exist)
+# Name + Location (best-effort; requires those lines exist)
 sed -i '' "s|^- Name:.*|- Name: $PROJECT_NAME|" "$GLOBAL_STATUS" || true
 sed -i '' "s|^- Location:.*|- Location: $TARGET_PATH|" "$GLOBAL_STATUS" || true
 
-echo "Active project path now:"
-grep -E '^Active project path:' "$GLOBAL_STATUS" || true
+# Ensure project state exists
 echo
-
 echo "== Ensuring project state exists =="
 "$REPO_ROOT/07_system/bin/project-init-state" "$TARGET_PATH"
+
+# Derive focus from project NEXT.md (contract: a line starting with 'Focus: ')
+PROJECT_NEXT="$TARGET_PATH/state/NEXT.md"
+FOCUS_LINE="$(grep -E '^Focus: ' "$PROJECT_NEXT" 2>/dev/null | head -n 1 || true)"
+if [[ -z "${FOCUS_LINE:-}" ]]; then
+  echo "Error: missing required Focus line in $PROJECT_NEXT"
+  echo "Add exactly one line like:"
+  echo "  Focus: <one sentence, <= 120 chars>"
+  exit 1
+fi
+FOCUS_VALUE="${FOCUS_LINE#Focus: }"
+
+echo
+echo "== Updating global focus + global NEXT pointer =="
+
+# Replace the first bullet under "## Current focus"
+perl -0777 -i -pe 's/(## Current focus\s*\n- ).*/$1'"$(printf '%s' "$FOCUS_VALUE" | sed 's/[\/&]/\\&/g')"'/m' "$GLOBAL_STATUS"
+
+# Rewrite global NEXT as routing-only (no accumulation)
+cat > "$GLOBAL_NEXT" <<EOF2
+# NEXT (Global)
+
+## Task #0 (always allowed)
+- If this file is not accurate, update it first.
+
+## Routing pointer
+- Active project NEXT: $TARGET_PATH/state/NEXT.md
+EOF2
+
+echo "Active project path now:"
+grep -E '^Active project path:' "$GLOBAL_STATUS" || true
 echo
 
 echo "== Starting new session =="
@@ -77,5 +113,5 @@ echo "== Starting new session =="
 
 echo
 echo "Switch complete."
-echo "Reminder: commit/push any state changes now if needed:"
+echo "Reminder: commit/push state changes now if needed:"
 echo "  git status -sb"

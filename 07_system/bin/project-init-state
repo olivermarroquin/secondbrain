@@ -17,6 +17,11 @@ fi
 mkdir -p "$PROJECT_PATH/state"
 
 for f in STATUS.md NEXT.md DECISIONS.md LOG.md; do
+  if [[ ! -f "$TEMPLATE_DIR/$f" ]]; then
+    echo "Error: missing template: $TEMPLATE_DIR/$f"
+    exit 1
+  fi
+
   if [[ -e "$PROJECT_PATH/state/$f" ]]; then
     echo "Skip (exists): $PROJECT_PATH/state/$f"
   else

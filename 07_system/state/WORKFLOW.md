@@ -37,3 +37,23 @@ When asking for help, provide:
 - relevant git diff (or say “clean”)
 - relevant sections of STATUS/NEXT
 Responses should be patch-style steps or diffs, with exact commands and recovery paths.
+
+## Focus contract (deterministic)
+- Every continuous project MUST have: 01_projects/<project>/state/NEXT.md containing exactly one line:
+  Focus: <one sentence, <= 120 chars>
+- The active project's Focus line is the single source of truth for global “Current focus”.
+
+## Global NEXT.md (routing only)
+- Global 07_system/state/NEXT.md MUST NOT contain executable tasks.
+- It must only point to the active project’s state/NEXT.md (and optionally a short note about why it’s active).
+- Project tasks live only in 01_projects/<project>/state/NEXT.md.
+
+## project-switch behavior (must be boring)
+On switch to 01_projects/<project>:
+- Refuse switch if there are uncommitted changes outside:
+  - 07_system/state/*
+  - 01_projects/*/state/*
+- Read Focus: from target project state/NEXT.md
+- Update global STATUS.md “Current focus” to match
+- Rewrite global NEXT.md pointer to the active project (no accumulation)
+- If Focus: is missing or duplicated → exit non-zero with a clear error
