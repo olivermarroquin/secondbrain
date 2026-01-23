@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  jobs-apply-and-mark <limit> [--batch <N|auto>] [--dry-run]
+                     [--date YYYY-MM-DD]
+                     [--review] [--edit]
+                     [--apply] [--commit] [--push]
+                     [--message "commit message"]
+
+defaults:
+  --batch auto
+  --date today
+  --review on (shows queue + mark preview)
+  --apply off (dry-run mode unless --apply)
+
+notes:
+  - This wrapper will OPEN URLs (unless --dry-run).
+  - It always writes a queue file in /tmp: /tmp/applied-<date>-batchN.txt
+  - It will NOT mark applied unless you pass --apply AND type APPLY.
+
+examples:
+  jobs-apply-and-mark 25
+  jobs-apply-and-mark 25 --dry-run
+  jobs-apply-and-mark 25 --batch auto --apply --commit --push
+  jobs-apply-and-mark 25 --batch 3 --apply --commit --message "status: batch -> applied (2026-01-22) batch 3"
+EOF
+  exit 0
+}
+
+# early help
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) usage ;;
+  esac
+done
+
+[[ $# -lt 1 ]] && usage
+
+LIMIT="${1:-}"
+shift
+
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "ERROR: limit must be numeric" >&2; exit 2; }
+
+DATE="$(date +%F)"
+BATCH="auto"
+DRYRUN=0
+REVIEW=1
+EDIT=0
+APPLY=0
+COMMIT=0
+PUSH=0
+MSG="status: batch -> applied (${DATE})"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --date) DATE="${2:-}"; shift 2 ;;
+    --batch) BATCH="${2:-}"; shift 2 ;;
+    --dry-run) DRYRUN=1; shift 1 ;;
+    --review) REVIEW=1; shift 1 ;;
+    --no-review) REVIEW=0; shift 1 ;;
+    --edit) EDIT=1; shift 1 ;;
+    --apply) APPLY=1; shift 1 ;;
+    --commit) COMMIT=1; shift 1 ;;
+    --push) PUSH=1; shift 1 ;;
+    --message) MSG="${2:-}"; shift 2 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+latest_queue() {
+  shopt -s nullglob
+  files=(/tmp/applied-"$DATE"-batch*.txt)
+  shopt -u nullglob
+  (( ${#files[@]} == 0 )) && { echo ""; return; }
+  ls -t "${files[@]}" | head -n 1
+}
+
+echo "Date:  $DATE"
+echo "Batch: $BATCH"
+echo
+
+if (( DRYRUN == 1 )); then
+  jobs-apply-batch "$LIMIT" --batch "$BATCH" --dry-run
+else
+  jobs-apply-batch "$LIMIT" --batch "$BATCH"
+fi
+
+Q="$(latest_queue)"
+if [[ -z "$Q" ]]; then
+  echo "ERROR: could not resolve queue file for date $DATE" >&2
+  exit 1
+fi
+
+echo
+echo "Resolved queue: $Q"
+echo
+
+if (( REVIEW == 1 )); then
+  jobs-queue-show "$Q"
+  echo
+  echo "Mark applied preview:"
+  jobs-batch-mark-applied --date "$DATE" --paths-file "$Q" || true
+  echo
+fi
+
+if (( APPLY == 0 )); then
+  echo "Dry run only. Re-run with --apply to mark applied."
+  exit 0
+fi
+
+if (( EDIT == 1 )); then
+  echo "Editing queue file (remove any paths you did NOT apply to): $Q"
+  ${EDITOR:-nano} "$Q"
+  echo
+  echo "Queue after edit:"
+  jobs-queue-show "$Q"
+  echo
+fi
+
+read -r -p "Type APPLY to mark these jobs as applied: " CONFIRM
+if [[ "$CONFIRM" != "APPLY" ]]; then
+  echo "Aborted."
+  exit 1
+fi
+
+ARGS=(--date "$DATE" --paths-file "$Q" --apply)
+if (( COMMIT == 1 )); then
+  ARGS+=(--commit --message "$MSG")
+fi
+
+jobs-batch-mark-applied "${ARGS[@]}"
+
+if (( PUSH == 1 )); then
+  cd "$HOME/secondbrain"
+  git push
+fi
+
+echo
+echo "Remaining not_applied:"
+jobs-list-unapplied
