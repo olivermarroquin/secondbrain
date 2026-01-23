@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+Q="${1:-}"
+
+if [[ -z "$Q" || ! -f "$Q" ]]; then
+  echo "usage: jobs-queue-show /path/to/queue.txt" >&2
+  exit 2
+fi
+
+cut() {
+  local s="$1" n="$2"
+  [[ ${#s} -le $n ]] && printf "%s" "$s" || printf "%s…" "${s:0:$((n-1))}"
+}
+
+printf "%-4s %-20s %-35s %-10s %s\n" "No." "Company" "Role" "Found" "URL"
+printf "%-4s %-20s %-35s %-10s %s\n" "----" "--------------------" "-----------------------------------" "----------" "----"
+
+n=1
+while IFS= read -r APP; do
+  [[ -z "${APP// /}" ]] && continue
+
+  if [[ ! -d "$APP" ]]; then
+    printf "%-4s %-20s %-35s %-10s %s\n" "$n" "ERROR" "missing app dir" "-" "$(cut "$APP" 80)"
+    ((n++))
+    continue
+  fi
+
+  META="$APP/tracking/job-meta.json"
+  if [[ ! -f "$META" ]]; then
+    printf "%-4s %-20s %-35s %-10s %s\n" "$n" "ERROR" "missing job-meta.json" "-" "$(cut "$APP" 80)"
+    ((n++))
+    continue
+  fi
+
+  # tab-separated fields to avoid space-splitting
+  IFS=$'\t' read -r COMPANY ROLE FOUND URL < <(python3 - "$META" <<'PY'
+import json, sys
+p=sys.argv[1]
+d=json.load(open(p))
+company=d.get("company","-")
+role=d.get("role_title","-").replace("\n"," ")
+found=d.get("date_found","-")
+url=d.get("source","-").strip()
+print(f"{company}\t{role}\t{found}\t{url}")
+PY
+)
+
+  printf "%-4s %-20s %-35s %-10s %s\n" \
+    "$n" \
+    "$(cut "$COMPANY" 20)" \
+    "$(cut "$ROLE" 35)" \
+    "$(cut "$FOUND" 10)" \
+    "$(cut "$URL" 80)"
+  ((n++))
+done < "$Q"
