@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  job-intake-edit-meta --app /abs/or/~/path/to/app [field setters...] [--apply] [--commit] [--push] [--message "..."]
+
+field setters:
+  --company snake_case
+  --role-family qa_automation_engineer|...
+  --role-title "Senior QA Automation Engineer"
+  --seniority junior|mid|senior|lead|unknown
+  --location "Remote"|"City, ST"|unknown
+  --employment-type W2|C2C|1099|full-time|contract|unknown
+  --source "https://..."
+  --date-found YYYY-MM-DD
+  --date-applied YYYY-MM-DD|null
+  --status not_applied|applied|rejected|interviewing|offer|unknown
+  --priority low|medium|high|unknown
+
+behavior:
+  - default is DRYRUN (prints before/after)
+  - --apply required to write
+  - --apply requires typing APPLY
+  - --commit stages + commits job-meta.json (requires --apply)
+  - --push pushes (requires --commit)
+EOF
+  exit 2
+}
+
+APP=""
+APPLY=0
+COMMIT=0
+PUSH=0
+MSG="meta: update job-meta.json"
+
+# fields (empty means "no change")
+COMPANY=""
+ROLE_FAMILY=""
+ROLE_TITLE=""
+SENIORITY=""
+LOCATION=""
+EMPLOYMENT_TYPE=""
+SOURCE=""
+DATE_FOUND=""
+DATE_APPLIED=""
+STATUS=""
+PRIORITY=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app) APP="${2:-}"; shift 2 ;;
+
+    --company) COMPANY="${2:-}"; shift 2 ;;
+    --role-family) ROLE_FAMILY="${2:-}"; shift 2 ;;
+    --role-title) ROLE_TITLE="${2:-}"; shift 2 ;;
+    --seniority) SENIORITY="${2:-}"; shift 2 ;;
+    --location) LOCATION="${2:-}"; shift 2 ;;
+    --employment-type) EMPLOYMENT_TYPE="${2:-}"; shift 2 ;;
+    --source) SOURCE="${2:-}"; shift 2 ;;
+    --date-found) DATE_FOUND="${2:-}"; shift 2 ;;
+    --date-applied) DATE_APPLIED="${2:-}"; shift 2 ;;
+    --status) STATUS="${2:-}"; shift 2 ;;
+    --priority) PRIORITY="${2:-}"; shift 2 ;;
+
+    --apply) APPLY=1; shift 1 ;;
+    --commit) COMMIT=1; shift 1 ;;
+    --push) PUSH=1; shift 1 ;;
+    --message) MSG="${2:-}"; shift 2 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -z "$APP" ]] && usage
+
+# Expand ~ safely
+if [[ "$APP" == ~* ]]; then
+  APP="${APP/#\~/$HOME}"
+fi
+
+(( PUSH == 0 || COMMIT == 1 )) || { echo "ERROR: --push requires --commit" >&2; exit 1; }
+(( COMMIT == 0 || APPLY == 1 )) || { echo "ERROR: --commit requires --apply" >&2; exit 1; }
+
+META="$APP/tracking/job-meta.json"
+[[ -d "$APP" ]] || { echo "ERROR: app dir missing: $APP" >&2; exit 1; }
+[[ -f "$META" ]] || { echo "ERROR: missing job-meta.json: $META" >&2; exit 1; }
+
+python3 -m json.tool "$META" > /dev/null || { echo "ERROR: job-meta.json is invalid JSON" >&2; exit 1; }
+
+TMP="$(mktemp)"
+
+# Pass values via env (prevents quoting/injection issues)
+COMPANY="$COMPANY" \
+ROLE_FAMILY="$ROLE_FAMILY" \
+ROLE_TITLE="$ROLE_TITLE" \
+SENIORITY="$SENIORITY" \
+LOCATION="$LOCATION" \
+EMPLOYMENT_TYPE="$EMPLOYMENT_TYPE" \
+SOURCE="$SOURCE" \
+DATE_FOUND="$DATE_FOUND" \
+DATE_APPLIED="$DATE_APPLIED" \
+STATUS="$STATUS" \
+PRIORITY="$PRIORITY" \
+python3 - "$META" > "$TMP" <<'PY'
+import json, os, sys
+
+p = sys.argv[1]
+d = json.load(open(p))
+
+def set_if(key, env):
+  val = os.environ.get(env, "")
+  if val == "":
+    return
+  d[key] = val
+
+set_if("company", "COMPANY")
+set_if("role_family", "ROLE_FAMILY")
+set_if("role_title", "ROLE_TITLE")
+set_if("seniority", "SENIORITY")
+set_if("location", "LOCATION")
+set_if("employment_type", "EMPLOYMENT_TYPE")
+set_if("source", "SOURCE")
+set_if("date_found", "DATE_FOUND")
+
+da = os.environ.get("DATE_APPLIED", "")
+if da != "":
+  if da.lower() == "null":
+    d["date_applied"] = None
+  else:
+    d["date_applied"] = da
+
+set_if("status", "STATUS")
+set_if("priority", "PRIORITY")
+
+print(json.dumps(d, indent=2) + "\n")
+PY
+
+python3 -m json.tool "$TMP" > /dev/null || { echo "ERROR: patched JSON invalid" >&2; rm -f "$TMP"; exit 1; }
+
+echo "META: $META"
+echo
+echo "Preview (before -> after):"
+echo "---- BEFORE ----"
+cat "$META"
+echo "---- AFTER  ----"
+cat "$TMP"
+
+if (( APPLY == 0 )); then
+  echo
+  echo "Dry run only. Re-run with --apply to write changes."
+  rm -f "$TMP"
+  exit 0
+fi
+
+echo
+read -r -p "Type APPLY to write job-meta.json: " CONFIRM
+if [[ "$CONFIRM" != "APPLY" ]]; then
+  echo "Aborted."
+  rm -f "$TMP"
+  exit 1
+fi
+
+mv "$TMP" "$META"
+python3 -m json.tool "$META" > /dev/null
+
+if (( COMMIT == 1 )); then
+  cd "$HOME/secondbrain"
+  git add "$META"
+  if git diff --cached --quiet; then
+    echo "Nothing to commit."
+  else
+    git commit -m "$MSG"
+  fi
+  if (( PUSH == 1 )); then
+    git push
+  fi
+fi
+
+echo "OK"
