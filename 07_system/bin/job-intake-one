@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  job-intake-one --company snake_case --role kebab-case --url "https://..." [options]
+
+required:
+  --company        snake_case (e.g., robert_half)
+  --role           kebab-case (e.g., senior-qa-automation-engineer)
+  --url            job posting URL (http/https)
+
+optional:
+  --date           YYYY-MM-DD (default: today)
+  --role-title     Human title (default: derived from role slug)
+  --seniority      junior|mid|senior|lead|unknown (default: unknown)
+  --location       default: unknown
+  --employment-type default: unknown
+  --priority       default: unknown
+  --family         default: qa_automation_engineer
+  --force          overwrite tracking files if they exist (danger)
+  --no-push        commit locally only (no git push)
+
+flow:
+  1) job-intake-init (creates skeleton + tracking)
+  2) job-intake-jd   (you paste JD; Ctrl+D)
+  3) job-intake-commit (validates + git add/commit/push)
+EOF
+  exit 2
+}
+
+# Defaults
+DATE="$(date +%F)"
+FAMILY="qa_automation_engineer"
+SENIORITY="unknown"
+LOCATION="unknown"
+EMPLOYMENT_TYPE="unknown"
+PRIORITY="unknown"
+ROLE_TITLE=""
+FORCE=0
+PUSH=1
+
+COMPANY=""
+ROLE=""
+URL=""
+
+# Parse
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --company) COMPANY="${2:-}"; shift 2 ;;
+    --role) ROLE="${2:-}"; shift 2 ;;
+    --url) URL="${2:-}"; shift 2 ;;
+    --date) DATE="${2:-}"; shift 2 ;;
+    --family) FAMILY="${2:-}"; shift 2 ;;
+    --role-title) ROLE_TITLE="${2:-}"; shift 2 ;;
+    --seniority) SENIORITY="${2:-}"; shift 2 ;;
+    --location) LOCATION="${2:-}"; shift 2 ;;
+    --employment-type) EMPLOYMENT_TYPE="${2:-}"; shift 2 ;;
+    --priority) PRIORITY="${2:-}"; shift 2 ;;
+    --force) FORCE=1; shift 1 ;;
+    --no-push) PUSH=0; shift 1 ;;
+    -h|--help) usage ;;
+    *) echo "unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -z "$COMPANY" || -z "$ROLE" || -z "$URL" ]] && usage
+
+# Build init command
+INIT_ARGS=(--company "$COMPANY" --date "$DATE" --role "$ROLE" --url "$URL" --family "$FAMILY"
+          --seniority "$SENIORITY" --location "$LOCATION" --employment-type "$EMPLOYMENT_TYPE" --priority "$PRIORITY")
+
+if [[ -n "$ROLE_TITLE" ]]; then
+  INIT_ARGS+=(--role-title "$ROLE_TITLE")
+fi
+if [[ "$FORCE" -eq 1 ]]; then
+  INIT_ARGS+=(--force)
+fi
+
+# 1) init (capture APP from first line)
+APP="$(job-intake-init "${INIT_ARGS[@]}" | head -n 1)"
+
+echo
+echo "APP: $APP"
+echo
+
+# 2) paste JD + validate
+job-intake-jd --app "$APP"
+
+# 3) commit/push
+if [[ "$PUSH" -eq 1 ]]; then
+  job-intake-commit --app "$APP"
+else
+  job-intake-commit --app "$APP" --no-push
+fi
+
+echo
+echo "Done."
