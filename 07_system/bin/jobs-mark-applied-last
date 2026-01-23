@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  jobs-mark-applied-last [--date YYYY-MM-DD] [--apply] [--commit] [--push] [--message "…"]
+
+default behavior:
+  - resolves newest /tmp/applied-<date>-batch*.txt
+  - shows queue (jobs-queue-show)
+  - DRYRUN mark-applied unless --apply
+
+examples:
+  jobs-mark-applied-last
+  jobs-mark-applied-last --date 2026-01-22
+  jobs-mark-applied-last --apply
+  jobs-mark-applied-last --apply --commit --message "status: batch -> applied (2026-01-22) last"
+  jobs-mark-applied-last --apply --commit --push
+EOF
+  exit 2
+}
+
+DATE="$(date +%F)"
+APPLY=0
+COMMIT=0
+PUSH=0
+MSG="status: applied via last queue"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --date) DATE="${2:-}"; shift 2 ;;
+    --apply) APPLY=1; shift 1 ;;
+    --commit) COMMIT=1; shift 1 ;;
+    --push) PUSH=1; shift 1 ;;
+    --message) MSG="${2:-}"; shift 2 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+# Resolve newest queue file safely (no ls/glob footguns)
+shopt -s nullglob
+files=(/tmp/applied-"$DATE"-batch*.txt)
+shopt -u nullglob
+
+if (( ${#files[@]} == 0 )); then
+  echo "ERROR: No queue file found for date $DATE (expected /tmp/applied-$DATE-batch*.txt)" >&2
+  exit 1
+fi
+
+# newest by mtime
+Q="$(ls -t "${files[@]}" | head -n 1)"
+
+echo "Resolved date : $DATE"
+echo "Queue file    : $Q"
+echo
+
+jobs-queue-show "$Q"
+echo
+
+echo "Mark applied preview:"
+# DRYRUN: omit --apply so tool reports to-change vs skipped
+jobs-batch-mark-applied --date "$DATE" --paths-file "$Q" || true
+
+if (( APPLY == 0 )); then
+  echo
+  echo "Dry run only. Re-run with --apply to write changes."
+  exit 0
+fi
+
+echo
+read -r -p "Type APPLY to mark these jobs as applied: " CONFIRM
+if [[ "$CONFIRM" != "APPLY" ]]; then
+  echo "Aborted."
+  exit 1
+fi
+
+ARGS=(--date "$DATE" --paths-file "$Q" --apply)
+if (( COMMIT == 1 )); then
+  ARGS+=(--commit --message "$MSG")
+fi
+
+jobs-batch-mark-applied "${ARGS[@]}"
+
+if (( PUSH == 1 )); then
+  cd "$HOME/secondbrain"
+  git push
+fi
