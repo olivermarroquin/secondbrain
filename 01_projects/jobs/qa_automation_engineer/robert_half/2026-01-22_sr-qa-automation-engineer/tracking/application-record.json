@@ -1,7 +1,13 @@
 {
   "application_id": "robert_half_2026-01-22_sr-qa-automation-engineer",
-  "current_status": "not_applied",
-  "status_history": [],
+  "current_status": "applied",
+  "status_history": [
+    {
+      "date": "2026-01-23",
+      "status": "applied",
+      "note": "Application submitted"
+    }
+  ],
   "resume_used": null,
   "cover_letter_used": null,
   "notes": ""
