@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  job-intake-from-url --app /abs/or/~/path/to/app --url "https://..." [--apply] [--force]
+
+behavior:
+  - fetches HTML with curl
+  - converts HTML -> text (tries: python bs4; fallback: strip tags)
+  - default is DRY RUN (prints line count + head/tail preview)
+  - --apply required to write to: <app>/jd/jd-raw.txt
+  - refuses to overwrite existing non-empty jd-raw.txt unless --force
+  - --apply requires typing APPLY
+
+notes:
+  - v1 does NOT execute JavaScript. If the JD is JS-rendered, use clipboard intake for now.
+
+examples:
+  job-intake-from-url --app "$APP" --url "https://example.com/post"
+  job-intake-from-url --app "$APP" --url "https://example.com/post" --apply
+  job-intake-from-url --app "$APP" --url "https://example.com/post" --apply --force
+EOF
+  exit 2
+}
+
+APP=""
+URL=""
+APPLY=0
+FORCE=0
+
+# early help
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) usage ;;
+  esac
+done
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app) APP="${2:-}"; shift 2 ;;
+    --url) URL="${2:-}"; shift 2 ;;
+    --apply) APPLY=1; shift 1 ;;
+    --force) FORCE=1; shift 1 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -z "$APP" || -z "$URL" ]] && usage
+
+# expand ~
+if [[ "$APP" == ~* ]]; then
+  APP="${APP/#\~/$HOME}"
+fi
+
+[[ -d "$APP" ]] || { echo "ERROR: app dir missing: $APP" >&2; exit 1; }
+[[ -d "$APP/jd" ]] || { echo "ERROR: missing jd/ folder: $APP/jd" >&2; exit 1; }
+
+OUT="$APP/jd/jd-raw.txt"
+
+# overwrite guard
+if [[ -f "$OUT" ]] && [[ -s "$OUT" ]] && (( FORCE == 0 )); then
+  echo "ERROR: jd-raw.txt already exists and is non-empty."
+  echo "Use --force to overwrite."
+  exit 1
+fi
+
+HTML="$(mktemp)"
+TXT="$(mktemp)"
+
+# fetch
+echo "Fetching:"
+echo "  $URL"
+curl -fsSL --max-time 30 -A "Mozilla/5.0" "$URL" > "$HTML" || {
+  echo "ERROR: curl failed to fetch URL" >&2
+  rm -f "$HTML" "$TXT"
+  exit 1
+}
+
+# convert html -> text (prefer bs4 if available)
+python3 - "$HTML" > "$TXT" <<'PY' || true
+import sys, re
+p=sys.argv[1]
+html=open(p,encoding="utf-8",errors="ignore").read()
+
+try:
+  from bs4 import BeautifulSoup
+  soup = BeautifulSoup(html, "html.parser")
+  for tag in soup(["script","style","noscript"]):
+    tag.decompose()
+  text = soup.get_text("\n")
+except Exception:
+  # fallback: crude strip tags
+  text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", "", html)
+  text = re.sub(r"(?is)<[^>]+>", "\n", text)
+
+# normalize
+lines=[ln.strip() for ln in text.splitlines()]
+lines=[ln for ln in lines if ln]
+out="\n".join(lines)
+print(out)
+PY
+
+# sanity
+if [[ ! -s "$TXT" ]]; then
+  echo "ERROR: extracted text is empty. Likely JS-rendered page. Use clipboard intake." >&2
+  rm -f "$HTML" "$TXT"
+  exit 1
+fi
+
+LINES="$(wc -l < "$TXT" | tr -d ' ')"
+
+echo
+echo "APP : $APP"
+echo "OUT : $OUT"
+echo "TXT : ${LINES} lines"
+echo
+echo "Preview (first 8):"
+sed -n '1,8p' "$TXT"
+echo
+echo "Preview (last 3):"
+tail -n 3 "$TXT"
+echo
+
+if (( APPLY == 0 )); then
+  echo "DRY RUN — nothing written. Re-run with --apply to write into jd-raw.txt."
+  rm -f "$HTML" "$TXT"
+  exit 0
+fi
+
+read -r -p "Type APPLY to write extracted text into jd-raw.txt: " CONFIRM
+if [[ "$CONFIRM" != "APPLY" ]]; then
+  echo "Aborted."
+  rm -f "$HTML" "$TXT"
+  exit 1
+fi
+
+mv "$TXT" "$OUT"
+rm -f "$HTML"
+
+echo
+echo "Wrote:"
+wc -l "$OUT"
+echo
+echo "Verify (first 5):"
+sed -n '1,5p' "$OUT"
+echo
+echo "Verify (last 1):"
+sed -n '$p' "$OUT"
+echo "OK"
