@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<EOF >&2
+usage:
+  job-intake-url --app "/path/to/application-folder" --url "https://..." [--no-push]
+
+updates:
+  - tracking/job-meta.json  (sets source)
+  - jd/job-post-url.txt     (mirrors url)
+
+guardrails:
+  - refuses if app path invalid
+  - refuses if url not http/https
+  - validates job-meta.json after edit
+  - commits with standard message
+EOF
+  exit 2
+}
+
+APP=""
+URL=""
+PUSH=1
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app) APP="${2:-}"; shift 2 ;;
+    --url) URL="${2:-}"; shift 2 ;;
+    --no-push) PUSH=0; shift 1 ;;
+    -h|--help) usage ;;
+    *) echo "unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -z "$APP" || -z "$URL" ]] && usage
+APP="${APP/#\~/$HOME}"
+
+# basic url validation
+if [[ ! "$URL" =~ ^https?:// ]]; then
+  echo "ERROR: --url must start with http:// or https://" >&2
+  exit 2
+fi
+
+JM="$APP/tracking/job-meta.json"
+JDU="$APP/jd/job-post-url.txt"
+
+[[ -f "$JM" ]] || { echo "ERROR: missing $JM" >&2; exit 2; }
+[[ -d "$APP/jd" ]] || { echo "ERROR: missing $APP/jd" >&2; exit 2; }
+
+# update job-meta.json source
+python3 - <<PY
+import json
+p="$JM"
+with open(p) as f:
+    d=json.load(f)
+d["source"]="$URL"
+with open(p,"w") as f:
+    f.write(json.dumps(d, indent=2) + "\n")
+PY
+
+# validate JSON
+python3 -m json.tool "$JM" >/dev/null || { echo "ERROR: job-meta.json invalid after edit" >&2; exit 2; }
+
+# update mirror file
+printf "%s\n" "$URL" > "$JDU"
+
+# commit
+read -r COMPANY ROLE_TITLE DATE_FOUND < <(python3 - <<PY
+import json
+d=json.load(open("$JM"))
+print(d.get("company","unknown"), d.get("role_title","unknown").replace('"',''), d.get("date_found","unknown"))
+PY
+)
+
+cd "$HOME/secondbrain"
+git add "$JM" "$JDU"
+
+MSG="intake: ${COMPANY} set job posting URL (${DATE_FOUND})"
+git commit -m "$MSG" || { echo "ERROR: commit failed (nothing to commit?)" >&2; exit 2; }
+
+if [[ "$PUSH" -eq 1 ]]; then
+  git push
+fi
+
+git status -sb
