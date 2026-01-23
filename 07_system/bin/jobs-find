@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+import argparse, json, pathlib, re, sys
+from datetime import date
+
+ROOT = pathlib.Path.home() / "secondbrain/01_projects/jobs"
+
+def cut(s: str, n: int) -> str:
+    s = s or ""
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+def load_json(p: pathlib.Path):
+    try:
+        return json.loads(p.read_text())
+    except Exception:
+        return None
+
+def parse_args():
+    ap = argparse.ArgumentParser(
+        prog="jobs-find",
+        add_help=True,
+        description="Search jobs dataset (job-meta.json) with filters."
+    )
+    ap.add_argument("--status", default=None, help="e.g., not_applied|applied|interviewing|rejected|offer|unknown")
+    ap.add_argument("--company", default=None, help="substring match (case-insensitive)")
+    ap.add_argument("--role", default=None, help="substring match against role_title (case-insensitive)")
+    ap.add_argument("--family", default=None, help="role_family match (e.g., qa_automation_engineer)")
+    ap.add_argument("--found", default=None, help="exact date_found YYYY-MM-DD")
+    ap.add_argument("--found-since", default=None, help="date_found >= YYYY-MM-DD")
+    ap.add_argument("--found-until", default=None, help="date_found <= YYYY-MM-DD")
+    ap.add_argument("--url", default=None, help="substring match against source URL (case-insensitive)")
+    ap.add_argument("--path", default=None, help="substring match against application folder path (case-insensitive)")
+    ap.add_argument("--limit", type=int, default=200, help="max rows (default 200)")
+    ap.add_argument("--sort", default="found_desc", choices=["found_desc","found_asc","company","role"],
+                    help="sort order (default found_desc)")
+    ap.add_argument("--print-path", action="store_true", help="include APP path column")
+    return ap.parse_args()
+
+def norm(s): return (s or "").strip()
+
+def as_date(s: str):
+    s = norm(s)
+    if not s:
+        return None
+    try:
+        y, m, d = s.split("-")
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+def main():
+    args = parse_args()
+
+    if not ROOT.exists():
+        print(f"ERROR: jobs root not found: {ROOT}", file=sys.stderr)
+        sys.exit(1)
+
+    want_status = norm(args.status).lower() if args.status else None
+    want_company = norm(args.company).lower() if args.company else None
+    want_role = norm(args.role).lower() if args.role else None
+    want_family = norm(args.family).lower() if args.family else None
+    want_found = as_date(args.found) if args.found else None
+    want_since = as_date(args.found_since) if args.found_since else None
+    want_until = as_date(args.found_until) if args.found_until else None
+    want_url = norm(args.url).lower() if args.url else None
+    want_path = norm(args.path).lower() if args.path else None
+
+    rows = []
+    for jm in ROOT.rglob("tracking/job-meta.json"):
+        d = load_json(jm)
+        if not isinstance(d, dict):
+            continue
+
+        company = norm(d.get("company", ""))
+        role = norm(d.get("role_title", ""))
+        family = norm(d.get("role_family", ""))
+        status = norm(d.get("status", "")).lower()
+        found_s = norm(d.get("date_found", ""))
+        found_d = as_date(found_s)
+        url = norm(d.get("source", ""))
+
+        app = jm.parent.parent  # .../<app>/tracking/job-meta.json
+        app_s = str(app)
+
+        # filters
+        if want_status and status != want_status:
+            continue
+        if want_family and family.lower() != want_family:
+            continue
+        if want_company and want_company not in company.lower():
+            continue
+        if want_role and want_role not in role.lower():
+            continue
+        if want_url and want_url not in url.lower():
+            continue
+        if want_path and want_path not in app_s.lower():
+            continue
+        if want_found and found_d != want_found:
+            continue
+        if want_since and (found_d is None or found_d < want_since):
+            continue
+        if want_until and (found_d is None or found_d > want_until):
+            continue
+
+        rows.append((found_d or date.min, company.lower(), role.lower(),
+                     company, role, found_s, status, url, app_s))
+
+    # sort
+    if args.sort == "found_desc":
+        rows.sort(key=lambda r: (r[0], r[1], r[2]), reverse=True)
+    elif args.sort == "found_asc":
+        rows.sort(key=lambda r: (r[0], r[1], r[2]))
+    elif args.sort == "company":
+        rows.sort(key=lambda r: (r[1], r[0], r[2]))
+    elif args.sort == "role":
+        rows.sort(key=lambda r: (r[2], r[0], r[1]))
+
+    rows = rows[: max(0, args.limit)]
+
+    # header
+    if args.print_path:
+        print(f"{'#':>3}  {'STATUS':10}  {'COMPANY':20}  {'ROLE':35}  {'FOUND':10}  {'URL':60}  APP")
+        print("-" * 140)
+    else:
+        print(f"{'#':>3}  {'STATUS':10}  {'COMPANY':20}  {'ROLE':35}  {'FOUND':10}  {'URL'}")
+        print("-" * 120)
+
+    for i, r in enumerate(rows, 1):
+        _, _, _, company, role, found_s, status, url, app_s = r
+        if args.print_path:
+            print(f"{i:>3}  {cut(status,10):10}  {cut(company,20):20}  {cut(role,35):35}  {cut(found_s,10):10}  {cut(url,60):60}  {app_s}")
+        else:
+            print(f"{i:>3}  {cut(status,10):10}  {cut(company,20):20}  {cut(role,35):35}  {cut(found_s,10):10}  {cut(url,80)}")
+
+    print(f"\nTotal matched: {len(rows)}")
+
+if __name__ == "__main__":
+    main()
