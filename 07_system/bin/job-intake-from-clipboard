@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  job-intake-from-clipboard --app /abs/or/~/path/to/app [--apply] [--force]
+
+behavior:
+  - reads JD text from macOS clipboard (pbpaste)
+  - default is DRY RUN (shows line count + head/tail preview)
+  - --apply required to write to: <app>/jd/jd-raw.txt
+  - refuses to overwrite existing non-empty jd-raw.txt unless --force
+  - --apply requires typing APPLY
+
+examples:
+  job-intake-from-clipboard --app "$APP"
+  job-intake-from-clipboard --app "$APP" --apply
+  job-intake-from-clipboard --app "$APP" --apply --force
+EOF
+  exit 2
+}
+
+APP=""
+APPLY=0
+FORCE=0
+
+# early help
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) usage ;;
+  esac
+done
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app) APP="${2:-}"; shift 2 ;;
+    --apply) APPLY=1; shift 1 ;;
+    --force) FORCE=1; shift 1 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -z "$APP" ]] && usage
+
+# expand ~
+if [[ "$APP" == ~* ]]; then
+  APP="${APP/#\~/$HOME}"
+fi
+
+[[ -d "$APP" ]] || { echo "ERROR: app dir missing: $APP" >&2; exit 1; }
+[[ -d "$APP/jd" ]] || { echo "ERROR: missing jd/ folder: $APP/jd" >&2; exit 1; }
+
+OUT="$APP/jd/jd-raw.txt"
+
+# read clipboard
+command -v pbpaste >/dev/null || { echo "ERROR: pbpaste not found (macOS required)" >&2; exit 1; }
+TMP="$(mktemp)"
+pbpaste > "$TMP"
+
+# basic validation
+if [[ ! -s "$TMP" ]]; then
+  echo "ERROR: clipboard is empty." >&2
+  rm -f "$TMP"
+  exit 1
+fi
+
+LINES="$(wc -l < "$TMP" | tr -d ' ')"
+FIRST="$(sed -n '1p' "$TMP" || true)"
+LAST="$(sed -n '$p' "$TMP" || true)"
+
+echo "APP : $APP"
+echo "OUT : $OUT"
+echo "CLIP: ${LINES} lines"
+echo
+echo "Preview (first 5):"
+sed -n '1,5p' "$TMP"
+echo
+echo "Preview (last 1):"
+sed -n '$p' "$TMP"
+echo
+
+# overwrite guard
+if [[ -f "$OUT" ]] && [[ -s "$OUT" ]] && (( FORCE == 0 )); then
+  echo "ERROR: jd-raw.txt already exists and is non-empty."
+  echo "Use --force to overwrite."
+  rm -f "$TMP"
+  exit 1
+fi
+
+if (( APPLY == 0 )); then
+  echo "DRY RUN — nothing written. Re-run with --apply to write clipboard into jd-raw.txt."
+  rm -f "$TMP"
+  exit 0
+fi
+
+read -r -p "Type APPLY to write clipboard into jd-raw.txt: " CONFIRM
+if [[ "$CONFIRM" != "APPLY" ]]; then
+  echo "Aborted."
+  rm -f "$TMP"
+  exit 1
+fi
+
+mv "$TMP" "$OUT"
+
+# post-validate
+echo
+echo "Wrote:"
+wc -l "$OUT"
+echo
+echo "Verify (first 5):"
+sed -n '1,5p' "$OUT"
+echo
+echo "Verify (last 1):"
+sed -n '$p' "$OUT"
+
+echo "OK"
