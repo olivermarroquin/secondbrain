@@ -16,19 +16,29 @@ usage:
     [--priority low|medium|high|unknown]
     [--family qa_automation_engineer]
     [--force]
+    [--source clipboard|url|stdin]
     [--dry-run]
-    [--commit] [--push] [--message "..."]
+    [--commit] [--push]
 
 behavior:
   - INIT: creates folders + tracking via job-intake-init
-  - JD: captures jd-raw.txt from clipboard via job-intake-from-clipboard
-  - COMMIT: commits via job-intake-commit (optional)
-  - default is LIVE write for JD (asks you to type APPLY); use --dry-run to preview only
-  - --push requires --commit
+  - JD capture input is selected by --source (default clipboard):
+      • clipboard: reads macOS clipboard -> jd-raw.txt
+      • url:       fetches URL -> jd-raw.txt (no JS; may fail on JS-rendered pages)
+      • stdin:     reads from terminal paste -> jd-raw.txt (Ctrl+D to finish)
+  - default is DRYRUN preview for JD if --dry-run is set
+  - overwrite protection: refuses to overwrite non-empty jd-raw.txt unless --force
+  - --commit commits the app intake; --push requires --commit
 
 examples:
-  job-intake-one --company robert_half --date 2026-01-23 --role sr-qa-automation-engineer --url "https://..." --commit --push
-  job-intake-one --company icf --date "$(date +%F)" --role senior-qa-automation-engineer --url "https://..." --dry-run
+  # clipboard (default)
+  job-intake-one --company robert_half --date "$(date +%F)" --role sr-qa-automation-engineer --url "https://..." --commit --push
+
+  # url scrape
+  job-intake-one --company icf --date "$(date +%F)" --role senior-qa-automation-engineer --url "https://..." --source url --commit --push
+
+  # stdin paste
+  job-intake-one --company stripe --date "$(date +%F)" --role qa-automation-engineer --url "https://..." --source stdin --commit --push
 EOF
   exit 2
 }
@@ -55,11 +65,13 @@ PRIORITY=""
 FAMILY=""
 FORCE=0
 
+# input selection
+SOURCE="clipboard"   # clipboard|url|stdin
+
 # flow controls
 DRYRUN=0
 COMMIT=0
 PUSH=0
-MSG="intake: job (JD + tracking)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -76,10 +88,10 @@ while [[ $# -gt 0 ]]; do
     --family) FAMILY="${2:-}"; shift 2 ;;
     --force) FORCE=1; shift 1 ;;
 
+    --source) SOURCE="${2:-}"; shift 2 ;;
     --dry-run) DRYRUN=1; shift 1 ;;
     --commit) COMMIT=1; shift 1 ;;
     --push) PUSH=1; shift 1 ;;
-    --message) MSG="${2:-}"; shift 2 ;;
     -h|--help) usage ;;
     *) echo "Unknown arg: $1" >&2; usage ;;
   esac
@@ -87,6 +99,11 @@ done
 
 [[ -n "$COMPANY" && -n "$DATE" && -n "$ROLE" && -n "$URL" ]] || usage
 (( PUSH == 0 || COMMIT == 1 )) || { echo "ERROR: --push requires --commit" >&2; exit 1; }
+
+case "$SOURCE" in
+  clipboard|url|stdin) ;;
+  *) echo "ERROR: --source must be clipboard|url|stdin" >&2; exit 1 ;;
+esac
 
 INIT_ARGS=(--company "$COMPANY" --date "$DATE" --role "$ROLE" --url "$URL")
 [[ -n "$ROLE_TITLE" ]] && INIT_ARGS+=(--role-title "$ROLE_TITLE")
@@ -99,31 +116,55 @@ INIT_ARGS=(--company "$COMPANY" --date "$DATE" --role "$ROLE" --url "$URL")
 
 # 1) INIT (first line from job-intake-init is APP path)
 APP="$(job-intake-init "${INIT_ARGS[@]}" | head -n 1)"
-
 [[ -n "$APP" ]] || { echo "ERROR: job-intake-init did not return an app path" >&2; exit 1; }
 
 echo "APP: $APP"
+echo "SRC: $SOURCE"
 echo
 
-# 2) JD capture from clipboard
+# helper to pass --force when requested
+FORCE_FLAG=()
+(( FORCE == 1 )) && FORCE_FLAG=(--force)
+
+# 2) JD capture
 if (( DRYRUN == 1 )); then
-  job-intake-from-clipboard --app "$APP"
+  case "$SOURCE" in
+    clipboard)
+      job-intake-from-clipboard --app "$APP"
+      ;;
+    url)
+      job-intake-from-url --app "$APP" --url "$URL"
+      ;;
+    stdin)
+      job-intake-jd --app "$APP"   # your stdin paste tool (Ctrl+D)
+      ;;
+  esac
   echo
-  echo "DRY RUN complete. Nothing written/committed."
+  echo "DRY RUN complete. Nothing committed."
+  echo "$APP"
   exit 0
 fi
 
-echo "JD capture: copy the full JD text in your browser (Cmd+C), then press Enter here."
-read -r -p "Press Enter to read clipboard: " _
-
-job-intake-from-clipboard --app "$APP" --apply $([[ $FORCE -eq 1 ]] && echo --force)
+case "$SOURCE" in
+  clipboard)
+    echo "JD capture (clipboard): copy full JD in browser (Cmd+C), then press Enter."
+    read -r -p "Press Enter to read clipboard: " _
+    job-intake-from-clipboard --app "$APP" --apply "${FORCE_FLAG[@]}"
+    ;;
+  url)
+    job-intake-from-url --app "$APP" --url "$URL" --apply "${FORCE_FLAG[@]}"
+    ;;
+  stdin)
+    job-intake-jd --app "$APP"
+    ;;
+esac
 
 # 3) Commit/push
 if (( COMMIT == 1 )); then
-  job-intake-commit --app "$APP" $([[ $PUSH -eq 1 ]] && echo "" || echo --no-push)
   if (( PUSH == 1 )); then
-    cd "$HOME/secondbrain"
-    git push
+    job-intake-commit --app "$APP"
+  else
+    job-intake-commit --app "$APP" --no-push
   fi
 else
   echo
@@ -131,6 +172,5 @@ else
   echo "  job-intake-commit --app \"$APP\""
 fi
 
-# Print APP path last line too (easy piping/echo)
 echo
 echo "$APP"
