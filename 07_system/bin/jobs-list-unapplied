@@ -1,32 +1,90 @@
 #!/usr/bin/env python3
-import json, pathlib
+import json
+import pathlib
+import sys
+from datetime import date
 
-def cut(s, n):
-    s = s or ""
-    return s if len(s) <= n else s[:n-1] + "…"
+def cut(s: str, n: int) -> str:
+    s = (s or "").strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+def usage(code=2):
+    print(
+        "usage:\n"
+        "  jobs-list-unapplied [--date YYYY-MM-DD]\n\n"
+        "examples:\n"
+        "  jobs-list-unapplied\n"
+        "  jobs-list-unapplied --date 2026-01-23\n"
+        "  jobs-list-unapplied --date $(date +%F)",
+        file=sys.stderr,
+    )
+    sys.exit(code)
+
+args = sys.argv[1:]
+filter_date = None
+
+i = 0
+while i < len(args):
+    a = args[i]
+    if a in ("-h", "--help"):
+        usage(0)
+    if a == "--date":
+        if i + 1 >= len(args):
+            usage(2)
+        filter_date = args[i + 1].strip()
+        i += 2
+        continue
+    print(f"Unknown arg: {a}", file=sys.stderr)
+    usage(2)
 
 root = pathlib.Path.home() / "secondbrain/01_projects/jobs"
-rows = []
+if not root.exists():
+    print(f"ERROR: jobs root missing: {root}", file=sys.stderr)
+    sys.exit(1)
 
+rows = []
 for jm in root.rglob("tracking/job-meta.json"):
     try:
         d = json.loads(jm.read_text())
     except Exception:
         continue
-    if d.get("status") == "not_applied":
-        rows.append((
-            d.get("company",""),
-            d.get("role_title",""),
-            d.get("date_found",""),
-            d.get("source","")
-        ))
 
-rows = sorted(rows)
+    if d.get("status") != "not_applied":
+        continue
 
-print(f"{'#':>3}  {'COMPANY':20}  {'ROLE':35}  {'FOUND':10}  {'URL'}")
-print("-"*110)
+    if filter_date and d.get("date_found") != filter_date:
+        continue
 
-for i, (company, role, found, url) in enumerate(rows, 1):
-    print(f"{i:>3}  {company:20}  {cut(role,35):35}  {found:10}  {cut(url,60)}")
+    app = jm.parent.parent  # application folder
+    company = d.get("company", "")
+    role = d.get("role_title", "")
+    found = d.get("date_found", "")
+    url = (d.get("source", "") or "").strip()
 
-print(f"\nTotal not_applied: {len(rows)}")
+    # prefer jd/job-post-url.txt if present
+    url_file = app / "jd" / "job-post-url.txt"
+    if url_file.exists():
+        u = url_file.read_text().strip()
+        if u:
+            url = u
+
+    rows.append((company, role, found, url, str(app)))
+
+rows.sort(key=lambda r: (r[2], r[0], r[1]), reverse=True)
+
+print(f"{'  #':>3}  {'COMPANY':20}  {'ROLE':35}  {'FOUND':10}  {'URL'}")
+print("-" * 110)
+
+for idx, (company, role, found, url, _app) in enumerate(rows, start=1):
+    print(
+        f"{idx:>3}  "
+        f"{company:20}  "
+        f"{cut(role,35):35}  "
+        f"{found:10}  "
+        f"{cut(url,60)}"
+    )
+
+label = "Total not_applied"
+if filter_date:
+    label += f" (date_found={filter_date})"
+print(f"\n{label}: {len(rows)}")

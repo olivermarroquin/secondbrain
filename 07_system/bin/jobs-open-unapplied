@@ -1,63 +1,131 @@
-#!/usr/bin/env python3
-import json, pathlib, subprocess, sys
+#!/usr/bin/env bash
+set -euo pipefail
 
-def parse_args(argv):
-    limit = None
-    dry = False
-    queue = None
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a in ("-n", "--limit") and i+1 < len(argv):
-            limit = int(argv[i+1]); i += 2; continue
-        if a in ("--dry-run", "--dry"):
-            dry = True; i += 1; continue
-        if a in ("--queue",) and i+1 < len(argv):
-            queue = argv[i+1]; i += 2; continue
-        if a in ("-h", "--help"):
-            print("usage: jobs-open-unapplied [--dry-run] [--limit N] [--queue FILE]")
-            sys.exit(0)
-        i += 1
-    return limit, dry, queue
+usage() {
+  cat <<'EOF' >&2
+usage:
+  jobs-open-unapplied [--limit N] [--queue /tmp/file.txt] [--dry-run] [--require-date YYYY-MM-DD]
 
-limit, dry, queue = parse_args(sys.argv[1:])
+behavior:
+  - scans ~/secondbrain/01_projects/jobs/**/tracking/job-meta.json
+  - selects status == not_applied
+  - optional: filters to date_found == --require-date
+  - opens up to --limit URLs (prefers jd/job-post-url.txt if present, else job-meta.source)
+  - writes selected APP paths to --queue (one per line)
 
-root = pathlib.Path.home() / "secondbrain/01_projects/jobs"
-items = []
+notes:
+  - default limit: 25
+  - default queue: /tmp/applied-YYYY-MM-DD-batch1.txt is handled by jobs-apply-batch (preferred)
 
-for jm in root.rglob("tracking/job-meta.json"):
+examples:
+  jobs-open-unapplied --limit 10 --dry-run
+  jobs-open-unapplied --limit 25 --require-date "$(date +%F)"
+EOF
+  exit 2
+}
+
+LIMIT=25
+QUEUE=""
+DRYRUN=0
+REQUIRE_DATE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --limit) LIMIT="${2:-}"; shift 2 ;;
+    --queue) QUEUE="${2:-}"; shift 2 ;;
+    --dry-run) DRYRUN=1; shift ;;
+    --require-date) REQUIRE_DATE="${2:-}"; shift 2 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "ERROR: --limit must be numeric" >&2; exit 1; }
+[[ -z "$QUEUE" ]] && { echo "ERROR: --queue is required (use jobs-apply-batch)" >&2; exit 1; }
+
+ROOT="$HOME/secondbrain/01_projects/jobs"
+[[ -d "$ROOT" ]] || { echo "ERROR: jobs root missing: $ROOT" >&2; exit 1; }
+
+TMP="$(mktemp)"
+trap 'rm -f "$TMP" 2>/dev/null || true' EXIT
+
+python3 - "$ROOT" "$LIMIT" "$REQUIRE_DATE" > "$TMP" <<'PY'
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+limit = int(sys.argv[2])
+req_date = sys.argv[3].strip()
+
+def read_json(p: Path):
     try:
-        d = json.loads(jm.read_text())
+        return json.loads(p.read_text())
     except Exception:
+        return None
+
+def get_url(app: Path, meta: dict):
+    url_file = app / "jd" / "job-post-url.txt"
+    if url_file.exists():
+        u = url_file.read_text().strip()
+        if u:
+            return u
+    u = (meta or {}).get("source","") or ""
+    return u.strip()
+
+rows = []
+for jm in root.rglob("tracking/job-meta.json"):
+    meta = read_json(jm)
+    if not meta:
         continue
-    if d.get("status") != "not_applied":
+    if meta.get("status") != "not_applied":
         continue
-    url = (d.get("source") or "").strip()
-    if not url or url.lower() == "unknown":
+    if req_date and meta.get("date_found") != req_date:
         continue
+
     app = jm.parent.parent
-    items.append((d.get("company",""), d.get("role_title",""), d.get("date_found",""), url, str(app)))
+    url = get_url(app, meta)
+    if not url or not url.startswith("http"):
+        continue
 
-items = sorted(items)
-if limit is not None:
-    items = items[:limit]
+    rows.append((
+        meta.get("date_found",""),
+        meta.get("company",""),
+        meta.get("role_title",""),
+        url,
+        str(app)
+    ))
 
-if not items:
-    print("No not_applied jobs with a usable URL.")
-    sys.exit(0)
+# sort: newest date first, then company, then role
+rows.sort(key=lambda r: (r[0], r[1], r[2]), reverse=True)
 
-print(f"Opening {len(items)} URL(s):")
-for c, r, df, url, app in items:
-    print(f"- {c} | {r} | {df} | {url}")
-    print(f"  {app}")
+rows = rows[:limit]
 
-if queue:
-    qpath = pathlib.Path(queue).expanduser()
-    qpath.write_text("\n".join(app for *_, app in items) + "\n")
-    print(f"\nWrote queue file: {qpath}")
+# output TSV: company, role, date, url, app
+for r in rows:
+    print("\t".join(r))
+PY
 
-if dry:
-    sys.exit(0)
+COUNT="$(wc -l < "$TMP" | tr -d ' ')"
 
-for _, _, _, url, _ in items:
-    subprocess.run(["open", url], check=False)
+if [[ "$COUNT" -eq 0 ]]; then
+  echo "Opening 0 URL(s):"
+  echo "Wrote queue file: $QUEUE"
+  : > "$QUEUE"
+  exit 0
+fi
+
+echo "Opening $COUNT URL(s):"
+: > "$QUEUE"
+
+while IFS=$'\t' read -r COMPANY ROLE FOUND URL APP; do
+  echo "- $COMPANY | $ROLE | $FOUND | $URL"
+  echo "  $APP"
+  echo "$APP" >> "$QUEUE"
+
+  if (( DRYRUN == 0 )); then
+    open "$URL"
+  fi
+done < "$TMP"
+
+echo
+echo "Wrote queue file: $QUEUE"

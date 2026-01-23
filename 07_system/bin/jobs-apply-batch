@@ -2,91 +2,85 @@
 set -euo pipefail
 
 usage() {
-  cat <<'EOF'
+  cat <<'EOF' >&2
 usage:
-  jobs-apply-batch <limit> [batch_number] [--dry-run]
-  jobs-apply-batch <limit> --batch <N|auto> [--dry-run]
+  jobs-apply-batch <limit> [batch_number|--batch auto] [--date YYYY-MM-DD] [--dry-run]
+
+behavior:
+  - resolves date D (default: today)
+  - resolves batch number (explicit N or --batch auto)
+  - builds queue file: /tmp/applied-D-batchN.txt
+  - opens not_applied URLs and writes APP paths to queue file
+  - if --date is provided, only opens jobs with date_found == that date
 
 examples:
-  jobs-apply-batch 25
-  jobs-apply-batch 25 2
-  jobs-apply-batch 25 --batch 3
   jobs-apply-batch 25 --batch auto
-  jobs-apply-batch 10 --batch auto --dry-run
+  jobs-apply-batch 25 --batch auto --date "$(date +%F)"
+  jobs-apply-batch 10 2 --dry-run
 EOF
-  exit 1
+  exit 2
 }
 
-# flags
+[[ $# -ge 1 ]] || usage
+LIMIT="${1:-}"
+shift || true
+
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "ERROR: limit must be numeric" >&2; exit 1; }
+
+DATE="$(date +%F)"
 DRYRUN=0
-BATCH_FLAG=""
+BATCH_MODE=""
+BATCH_NUM=""
+REQUIRE_DATE=""
 
-# collect non-flag args
-ARGS=()
-
+# parse remaining args
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dry-run) DRYRUN=1; shift 1 ;;
-    --batch) BATCH_FLAG="${2:-}"; shift 2 ;;
-    -h|--help) usage ;;
-    *) ARGS+=("$1"); shift 1 ;;
+    --batch)
+      BATCH_MODE="${2:-}"; shift 2 ;;
+    --date)
+      REQUIRE_DATE="${2:-}"; shift 2 ;;
+    --dry-run)
+      DRYRUN=1; shift ;;
+    -h|--help)
+      usage ;;
+    *)
+      # positional batch_number
+      if [[ -z "$BATCH_NUM" && "$1" =~ ^[0-9]+$ ]]; then
+        BATCH_NUM="$1"; shift
+      else
+        echo "Unknown arg: $1" >&2
+        usage
+      fi
+      ;;
   esac
 done
 
-N="${ARGS[0]:-}"
-BATCH_POS="${ARGS[1]:-}"
-
-[[ -z "$N" ]] && usage
-
-D="$(date +%F)"
-
-auto_batch() {
-  # Find max batch number for today based on existing queue files, then +1.
-  # /tmp/applied-YYYY-MM-DD-batchN.txt
-  local pattern="/tmp/applied-${D}-batch"*.txt
-  local max=0
-  local f base n
-  shopt -s nullglob
-  for f in $pattern; do
-    base="$(basename "$f")"
-    # extract N from ...-batchN.txt
-    n="${base#applied-${D}-batch}"
-    n="${n%.txt}"
-    [[ "$n" =~ ^[0-9]+$ ]] || continue
-    (( n > max )) && max="$n"
+# batch number resolution
+if [[ "$BATCH_MODE" == "auto" ]]; then
+  # find next available N for DATE (max existing + 1)
+  N=1
+  while [[ -f "/tmp/applied-${DATE}-batch${N}.txt" ]]; do
+    ((N++))
   done
-  shopt -u nullglob
-  echo $((max + 1))
-}
-
-# Determine batch number
-BATCH="1"
-if [[ -n "$BATCH_FLAG" ]]; then
-  if [[ "$BATCH_FLAG" == "auto" ]]; then
-    BATCH="$(auto_batch)"
-  else
-    [[ "$BATCH_FLAG" =~ ^[0-9]+$ ]] || { echo "ERROR: --batch must be a number or 'auto'"; exit 2; }
-    BATCH="$BATCH_FLAG"
-  fi
-elif [[ -n "$BATCH_POS" ]]; then
-  [[ "$BATCH_POS" =~ ^[0-9]+$ ]] || { echo "ERROR: batch_number must be numeric"; exit 2; }
-  BATCH="$BATCH_POS"
+  BATCH_NUM="$N"
+else
+  [[ -z "$BATCH_NUM" ]] && BATCH_NUM="1"
 fi
 
-Q="/tmp/applied-${D}-batch${BATCH}.txt"
+Q="/tmp/applied-${DATE}-batch${BATCH_NUM}.txt"
 
-echo "Date:  $D"
-echo "Batch: $BATCH"
+echo "Date:  $DATE"
 echo "Queue: $Q"
 echo
 
-if [[ "$DRYRUN" -eq 1 ]]; then
-  jobs-open-unapplied --limit "$N" --queue "$Q" --dry-run
-else
-  jobs-open-unapplied --limit "$N" --queue "$Q"
-fi
+ARGS=(--limit "$LIMIT" --queue "$Q")
+(( DRYRUN == 1 )) && ARGS+=(--dry-run)
+[[ -n "$REQUIRE_DATE" ]] && ARGS+=(--require-date "$REQUIRE_DATE")
+
+jobs-open-unapplied "${ARGS[@]}"
 
 echo
 echo "Next (after you apply):"
-echo "jobs-batch-mark-applied --date \"$D\" --paths-file \"$Q\" --apply --commit --message \"status: batch -> applied ($D) batch $BATCH\""
+echo "jobs-batch-mark-applied --date \"${DATE}\" --paths-file \"${Q}\" --apply --commit --message \"status: batch -> applied (${DATE}) batch ${BATCH_NUM}\""
 echo "git push"
