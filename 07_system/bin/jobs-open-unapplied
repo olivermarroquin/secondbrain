@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+import json, pathlib, subprocess, sys
+
+def parse_args(argv):
+    limit = None
+    dry = False
+    queue = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("-n", "--limit") and i+1 < len(argv):
+            limit = int(argv[i+1]); i += 2; continue
+        if a in ("--dry-run", "--dry"):
+            dry = True; i += 1; continue
+        if a in ("--queue",) and i+1 < len(argv):
+            queue = argv[i+1]; i += 2; continue
+        if a in ("-h", "--help"):
+            print("usage: jobs-open-unapplied [--dry-run] [--limit N] [--queue FILE]")
+            sys.exit(0)
+        i += 1
+    return limit, dry, queue
+
+limit, dry, queue = parse_args(sys.argv[1:])
+
+root = pathlib.Path.home() / "secondbrain/01_projects/jobs"
+items = []
+
+for jm in root.rglob("tracking/job-meta.json"):
+    try:
+        d = json.loads(jm.read_text())
+    except Exception:
+        continue
+    if d.get("status") != "not_applied":
+        continue
+    url = (d.get("source") or "").strip()
+    if not url or url.lower() == "unknown":
+        continue
+    app = jm.parent.parent
+    items.append((d.get("company",""), d.get("role_title",""), d.get("date_found",""), url, str(app)))
+
+items = sorted(items)
+if limit is not None:
+    items = items[:limit]
+
+if not items:
+    print("No not_applied jobs with a usable URL.")
+    sys.exit(0)
+
+print(f"Opening {len(items)} URL(s):")
+for c, r, df, url, app in items:
+    print(f"- {c} | {r} | {df} | {url}")
+    print(f"  {app}")
+
+if queue:
+    qpath = pathlib.Path(queue).expanduser()
+    qpath.write_text("\n".join(app for *_, app in items) + "\n")
+    print(f"\nWrote queue file: {qpath}")
+
+if dry:
+    sys.exit(0)
+
+for _, _, _, url, _ in items:
+    subprocess.run(["open", url], check=False)

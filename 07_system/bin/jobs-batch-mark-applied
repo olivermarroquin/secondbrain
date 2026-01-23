@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+import argparse, json, pathlib, sys, subprocess
+from datetime import datetime
+
+def die(msg, code=2):
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+def read_json(p: pathlib.Path):
+    return json.loads(p.read_text())
+
+def write_json(p: pathlib.Path, obj):
+    p.write_text(json.dumps(obj, indent=2) + "\n")
+
+def ensure_app_dir(app: pathlib.Path):
+    if not app.exists() or not app.is_dir():
+        die(f"App folder not found: {app}")
+    jm = app / "tracking/job-meta.json"
+    ar = app / "tracking/application-record.json"
+    sh = app / "tracking/status-history.md"
+    if not jm.exists(): die(f"Missing: {jm}")
+    if not ar.exists(): die(f"Missing: {ar}")
+    if not sh.exists(): die(f"Missing: {sh}")
+    return jm, ar, sh
+
+def append_status_md(sh_path: pathlib.Path, date_str: str, line: str):
+    # append-only, but avoid duplicating exact "- Application submitted" under same date block
+    text = sh_path.read_text()
+    block = f"## {date_str}\n- {line}\n"
+    if block in text:
+        return False
+    # If date header exists but line not present, append line under it
+    if f"## {date_str}\n" in text and f"- {line}\n" in text:
+        return False
+    sh_path.write_text(text.rstrip("\n") + f"\n\n## {date_str}\n- {line}\n")
+    return True
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="jobs-batch-mark-applied",
+        description="Batch mark specific job applications as applied (guarded; dry-run by default)."
+    )
+    ap.add_argument("--date", required=True, help="YYYY-MM-DD date_applied to set")
+    ap.add_argument("--note", default="Application submitted", help="Note stored in status_history + status-history.md")
+    ap.add_argument("--apply", action="store_true", help="Actually write changes (otherwise dry-run)")
+    ap.add_argument("--commit", action="store_true", help="After apply, git add + commit tracking changes as one commit")
+    ap.add_argument("--message", default=None, help="Commit message (used with --commit)")
+    ap.add_argument("--paths-file", default=None, help="File containing one application folder path per line")
+    ap.add_argument("apps", nargs="*", help="Application folder paths")
+    args = ap.parse_args()
+
+    # validate date
+    try:
+        datetime.strptime(args.date, "%Y-%m-%d")
+    except ValueError:
+        die("--date must be YYYY-MM-DD")
+
+    apps = []
+    if args.paths_file:
+        pf = pathlib.Path(args.paths_file).expanduser()
+        if not pf.exists():
+            die(f"--paths-file not found: {pf}")
+        for line in pf.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                apps.append(pathlib.Path(line).expanduser())
+    for a in args.apps:
+        apps.append(pathlib.Path(a).expanduser())
+
+    if not apps:
+        die("No application paths provided. Pass paths as args or via --paths-file.")
+
+    changes = []
+    skips = []
+
+    for app in apps:
+        jm_path, ar_path, sh_path = ensure_app_dir(app)
+        jm = read_json(jm_path)
+        ar = read_json(ar_path)
+
+        cur_status = jm.get("status")
+        if cur_status != "not_applied":
+            skips.append((app, f"skip: job-meta.status={cur_status!r}"))
+            continue
+
+        url = (jm.get("source") or "").strip()
+        company = jm.get("company", "")
+        role = jm.get("role_title", "")
+        changes.append((app, company, role, url))
+
+        if args.apply:
+            # job-meta
+            jm["status"] = "applied"
+            jm["date_applied"] = args.date
+            write_json(jm_path, jm)
+
+            # application-record
+            ar["current_status"] = "applied"
+            ar.setdefault("status_history", [])
+            ar["status_history"].append({"date": args.date, "status": "applied", "note": args.note})
+            write_json(ar_path, ar)
+
+            # status-history.md (append-only)
+            append_status_md(sh_path, args.date, args.note)
+
+    # report
+    print(f"{'MODE':8} {'COUNT':5}  DETAILS")
+    mode = "APPLY" if args.apply else "DRYRUN"
+    print(f"{mode:8} {len(changes):5}  to-change")
+    print(f"{'':8} {len(skips):5}  skipped\n")
+
+    if changes:
+        print("Will mark APPLIED:")
+        for app, company, role, url in changes:
+            print(f"- {company} | {role} | {url or 'NO_URL'}")
+            print(f"  {app}")
+    if skips:
+        print("\nSkipped:")
+        for app, reason in skips:
+            print(f"- {reason}\n  {app}")
+
+    # optional commit
+    if args.apply and args.commit and changes:
+        # stage only tracking folders for each app
+        for app, *_ in changes:
+            subprocess.run(["git", "add", str(app / "tracking")], check=False)
+
+        msg = args.message or f"status: batch -> applied ({args.date})"
+        subprocess.run(["git", "commit", "-m", msg], check=False)
+
+if __name__ == "__main__":
+    main()
