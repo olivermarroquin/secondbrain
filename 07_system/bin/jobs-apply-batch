@@ -2,40 +2,81 @@
 set -euo pipefail
 
 usage() {
-  cat <<EOF
+  cat <<'EOF'
 usage:
   jobs-apply-batch <limit> [batch_number] [--dry-run]
+  jobs-apply-batch <limit> --batch <N|auto> [--dry-run]
 
 examples:
   jobs-apply-batch 25
   jobs-apply-batch 25 2
-  jobs-apply-batch 10 --dry-run
+  jobs-apply-batch 25 --batch 3
+  jobs-apply-batch 25 --batch auto
+  jobs-apply-batch 10 --batch auto --dry-run
 EOF
   exit 1
 }
 
+# flags
 DRYRUN=0
+BATCH_FLAG=""
+
+# collect non-flag args
 ARGS=()
 
-for a in "$@"; do
-  case "$a" in
-    --dry-run) DRYRUN=1 ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRYRUN=1; shift 1 ;;
+    --batch) BATCH_FLAG="${2:-}"; shift 2 ;;
     -h|--help) usage ;;
-    *) ARGS+=("$a") ;;
+    *) ARGS+=("$1"); shift 1 ;;
   esac
 done
 
 N="${ARGS[0]:-}"
-BATCH="${ARGS[1]:-1}"
+BATCH_POS="${ARGS[1]:-}"
 
-if [[ -z "$N" ]]; then
-  usage
-fi
+[[ -z "$N" ]] && usage
 
 D="$(date +%F)"
+
+auto_batch() {
+  # Find max batch number for today based on existing queue files, then +1.
+  # /tmp/applied-YYYY-MM-DD-batchN.txt
+  local pattern="/tmp/applied-${D}-batch"*.txt
+  local max=0
+  local f base n
+  shopt -s nullglob
+  for f in $pattern; do
+    base="$(basename "$f")"
+    # extract N from ...-batchN.txt
+    n="${base#applied-${D}-batch}"
+    n="${n%.txt}"
+    [[ "$n" =~ ^[0-9]+$ ]] || continue
+    (( n > max )) && max="$n"
+  done
+  shopt -u nullglob
+  echo $((max + 1))
+}
+
+# Determine batch number
+BATCH="1"
+if [[ -n "$BATCH_FLAG" ]]; then
+  if [[ "$BATCH_FLAG" == "auto" ]]; then
+    BATCH="$(auto_batch)"
+  else
+    [[ "$BATCH_FLAG" =~ ^[0-9]+$ ]] || { echo "ERROR: --batch must be a number or 'auto'"; exit 2; }
+    BATCH="$BATCH_FLAG"
+  fi
+elif [[ -n "$BATCH_POS" ]]; then
+  [[ "$BATCH_POS" =~ ^[0-9]+$ ]] || { echo "ERROR: batch_number must be numeric"; exit 2; }
+  BATCH="$BATCH_POS"
+fi
+
 Q="/tmp/applied-${D}-batch${BATCH}.txt"
 
 echo "Date:  $D"
+echo "Batch: $BATCH"
 echo "Queue: $Q"
 echo
 
