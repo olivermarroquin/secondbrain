@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+usage:
+  jobs-apply-batch <limit> [batch_number] [--dry-run]
+
+examples:
+  jobs-apply-batch 25
+  jobs-apply-batch 25 2
+  jobs-apply-batch 10 --dry-run
+EOF
+  exit 1
+}
+
+DRYRUN=0
+ARGS=()
+
+for a in "$@"; do
+  case "$a" in
+    --dry-run) DRYRUN=1 ;;
+    -h|--help) usage ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+
+N="${ARGS[0]:-}"
+BATCH="${ARGS[1]:-1}"
+
+if [[ -z "$N" ]]; then
+  usage
+fi
+
+D="$(date +%F)"
+Q="/tmp/applied-${D}-batch${BATCH}.txt"
+
+echo "Date:  $D"
+echo "Queue: $Q"
+echo
+
+if [[ "$DRYRUN" -eq 1 ]]; then
+  jobs-open-unapplied --limit "$N" --queue "$Q" --dry-run
+else
+  jobs-open-unapplied --limit "$N" --queue "$Q"
+fi
+
+echo
+echo "Next (after you apply):"
+echo "jobs-batch-mark-applied --date \"$D\" --paths-file \"$Q\" --apply --commit --message \"status: batch -> applied ($D) batch $BATCH\""
+echo "git push"

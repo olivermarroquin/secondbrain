@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+import argparse, json, pathlib, re, sys
+
+def die(msg, code=2):
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+def valid_snake(s): return re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)*", s) is not None
+def valid_kebab(s): return re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", s) is not None
+def valid_date(s): return re.fullmatch(r"\d{4}-\d{2}-\d{2}", s) is not None
+
+ap = argparse.ArgumentParser(prog="job-intake-init")
+ap.add_argument("--company", required=True, help="snake_case")
+ap.add_argument("--date", required=True, help="YYYY-MM-DD")
+ap.add_argument("--role", required=True, help="kebab-case role slug")
+ap.add_argument("--url", required=True, help="job posting URL")
+ap.add_argument("--role-title", default=None, help="Human title (optional; default derived from role slug)")
+ap.add_argument("--seniority", default="unknown", help="junior|mid|senior|lead|unknown")
+ap.add_argument("--location", default="unknown")
+ap.add_argument("--employment-type", default="unknown")
+ap.add_argument("--priority", default="unknown")
+ap.add_argument("--family", default="qa_automation_engineer")
+ap.add_argument("--force", action="store_true", help="Overwrite tracking files if they exist")
+args = ap.parse_args()
+
+company = args.company.strip()
+role = args.role.strip()
+date = args.date.strip()
+url = args.url.strip()
+
+if not valid_snake(company): die("--company must be snake_case (e.g., robert_half)")
+if not valid_kebab(role): die("--role must be kebab-case (e.g., senior-qa-automation-engineer)")
+if not valid_date(date): die("--date must be YYYY-MM-DD")
+
+home = pathlib.Path.home()
+base = home / "secondbrain/01_projects/jobs" / args.family / company
+app_dir = base / f"{date}_{role}"
+
+# create dirs
+for p in [app_dir/"jd", app_dir/"tracking", app_dir/"resume_refs", app_dir/"notes"]:
+    p.mkdir(parents=True, exist_ok=True)
+
+jm_path = app_dir/"tracking/job-meta.json"
+ar_path = app_dir/"tracking/application-record.json"
+sh_path = app_dir/"tracking/status-history.md"
+jd_raw  = app_dir/"jd/jd-raw.txt"
+jd_url  = app_dir/"jd/job-post-url.txt"
+
+# refuse overwrite unless --force
+for p in [jm_path, ar_path, sh_path]:
+    if p.exists() and not args.force:
+        die(f"{p} exists. Re-run with --force if you truly want to overwrite.")
+
+role_title = args.role_title or role.replace("-", " ").title()
+app_id = f"{company}_{date}_{role}"
+
+job_meta = {
+  "company": company,
+  "role_family": args.family,
+  "role_title": role_title,
+  "seniority": args.seniority,
+  "location": args.location,
+  "employment_type": args.employment_type,
+  "source": url,
+  "date_found": date,
+  "date_applied": None,
+  "status": "not_applied",
+  "priority": args.priority
+}
+
+app_record = {
+  "application_id": app_id,
+  "current_status": "not_applied",
+  "status_history": [],
+  "resume_used": None,
+  "cover_letter_used": None,
+  "notes": ""
+}
+
+status_md = f"""# Status History
+
+## {date}
+- Job identified
+- JD captured (pending paste)
+- Application not yet submitted
+"""
+
+# write files
+jm_path.write_text(json.dumps(job_meta, indent=2) + "\n")
+ar_path.write_text(json.dumps(app_record, indent=2) + "\n")
+sh_path.write_text(status_md)
+
+# url mirror always updated
+jd_url.write_text(url + "\n")
+
+# only create jd-raw if missing or force (don’t blow away pasted JD unless force)
+if not jd_raw.exists() or args.force:
+    jd_raw.write_text("")
+
+print(str(app_dir))
+print()
+print("Next:")
+print(f'  job-intake-jd --app "{app_dir}"')
+print(f'  job-intake-commit --app "{app_dir}"')

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo 'usage: job-intake-commit --app "/path/to/application-folder" [--no-push]' >&2
+  exit 2
+}
+
+APP=""
+PUSH=1
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --app) APP="${2:-}"; shift 2 ;;
+    --no-push) PUSH=0; shift 1 ;;
+    -h|--help) usage ;;
+    *) echo "unknown arg: $1" >&2; usage ;;
+  esac
+done
+
+[[ -z "$APP" ]] && usage
+APP="${APP/#\~/$HOME}"
+
+JM="$APP/tracking/job-meta.json"
+AR="$APP/tracking/application-record.json"
+JD="$APP/jd/jd-raw.txt"
+
+[[ -f "$JM" ]] || { echo "ERROR: missing $JM" >&2; exit 2; }
+[[ -f "$AR" ]] || { echo "ERROR: missing $AR" >&2; exit 2; }
+[[ -f "$JD" ]] || { echo "ERROR: missing $JD" >&2; exit 2; }
+
+python3 -m json.tool "$JM" >/dev/null || { echo "ERROR: job-meta.json invalid" >&2; exit 2; }
+python3 -m json.tool "$AR" >/dev/null || { echo "ERROR: application-record.json invalid" >&2; exit 2; }
+
+LINES="$(wc -l < "$JD" | tr -d ' ')"
+[[ "$LINES" -gt 0 ]] || { echo "ERROR: jd-raw.txt is empty" >&2; exit 2; }
+
+# commit message from job-meta
+read -r COMPANY ROLE_TITLE DATE_FOUND < <(python3 - <<PY
+import json
+d=json.load(open("$JM"))
+print(d.get("company","unknown"), d.get("role_title","unknown").replace('"',''), d.get("date_found","unknown"))
+PY
+)
+
+cd "$HOME/secondbrain"
+
+git add "$APP"
+MSG="intake: ${COMPANY} ${ROLE_TITLE} (JD + tracking)"
+git commit -m "$MSG" || { echo "ERROR: commit failed (nothing to commit?)" >&2; exit 2; }
+
+if [[ "$PUSH" -eq 1 ]]; then
+  git push
+fi
+
+git status -sb
