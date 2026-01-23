@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF' >&2
+usage:
+  jobs-queue-prune /path/to/queue.txt [--apply]
+
+behavior:
+  - default is DRY RUN
+  - --apply required to overwrite the queue file
+  - will REMOVE entries that:
+      • do not exist
+      • are missing job-meta.json
+      • have status != not_applied
+
+example:
+  jobs-queue-prune /tmp/applied-2026-01-22-batch1.txt
+  jobs-queue-prune /tmp/applied-2026-01-22-batch1.txt --apply
+EOF
+  exit 2
+}
+
+QUEUE="${1:-}"
+APPLY=false
+
+[[ -z "$QUEUE" ]] && usage
+[[ ! -f "$QUEUE" ]] && { echo "ERROR: queue file not found: $QUEUE" >&2; exit 1; }
+
+if [[ "${2:-}" == "--apply" ]]; then
+  APPLY=true
+elif [[ $# -gt 1 ]]; then
+  echo "ERROR: unknown arg: ${2:-}" >&2
+  usage
+fi
+
+TMP="$(mktemp)"
+KEPT=0
+DROPPED=0
+
+while IFS= read -r APP; do
+  [[ -z "${APP// /}" ]] && continue
+
+  META="$APP/tracking/job-meta.json"
+
+  if [[ ! -d "$APP" ]]; then
+    ((DROPPED++))
+    continue
+  fi
+
+  if [[ ! -f "$META" ]]; then
+    ((DROPPED++))
+    continue
+  fi
+
+  STATUS="$(python3 - "$META" <<'PY'
+import json, sys
+p = sys.argv[1]
+with open(p) as f:
+  print(json.load(f).get("status", "unknown"))
+PY
+)"
+
+  if [[ "$STATUS" != "not_applied" ]]; then
+    ((DROPPED++))
+    continue
+  fi
+
+  echo "$APP" >> "$TMP"
+  ((KEPT++))
+done < "$QUEUE"
+
+echo "Queue file : $QUEUE"
+echo "Kept       : $KEPT"
+echo "Dropped    : $DROPPED"
+echo
+
+if [[ "$APPLY" = false ]]; then
+  echo "DRY RUN — queue not modified."
+  echo "Re-run with --apply to overwrite."
+  rm -f "$TMP"
+  exit 0
+fi
+
+read -r -p "Type PRUNE to overwrite queue file: " CONFIRM
+if [[ "$CONFIRM" != "PRUNE" ]]; then
+  echo "Aborted."
+  rm -f "$TMP"
+  exit 1
+fi
+
+mv "$TMP" "$QUEUE"
+echo "Queue updated."
