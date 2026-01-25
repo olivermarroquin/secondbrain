@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+import argparse, json, re
+from pathlib import Path
+
+def die(msg: str, code=1):
+    print(f"ERROR: {msg}")
+    raise SystemExit(code)
+
+def cut(s: str, n: int) -> str:
+    s = (s or "").strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+def load_json(p: Path):
+    try:
+        return json.loads(p.read_text())
+    except Exception as e:
+        die(f"invalid JSON: {p} ({e})")
+
+def norm(s: str) -> str:
+    s = (s or "").lower()
+    s = s.replace("\u2019", "'")
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def has(text: str, kw: str) -> bool:
+    kw = (kw or "").strip().lower()
+    if not kw:
+        return False
+    return kw in text
+
+def score(sig: dict, text: str):
+    pref = [k for k in sig.get("preferred_keywords", []) if isinstance(k, str)]
+    neut = [k for k in sig.get("neutral_keywords", []) if isinstance(k, str)]
+    anti = [k for k in sig.get("anti_signals", []) if isinstance(k, str)]
+
+    hits_pref = [k for k in pref if has(text, k)]
+    hits_neut = [k for k in neut if has(text, k)]
+    hits_anti = [k for k in anti if has(text, k)]
+
+    # v2 scoring: keep it simple & explainable
+    sc = 0
+    sc += 10 * len(hits_pref)
+    sc += 2 * len(hits_neut)
+    sc -= 12 * len(hits_anti)
+
+    # stack cues (soft boosts)
+    ps = sig.get("primary_stack", {}) or {}
+    lang = (ps.get("language") or "").lower()
+    tool = (ps.get("automation_tool") or "").lower()
+
+    if lang and has(text, lang): sc += 6
+    if tool and has(text, tool): sc += 8
+
+    return sc, hits_pref, hits_neut, hits_anti, lang, tool
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--app", required=True, help="Application folder path")
+    ap.add_argument("--top", type=int, default=4, help="How many to show (default 4)")
+    ap.add_argument("--family", default="qa_automation_engineer", help="Template family folder")
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser()
+    if not app.is_dir():
+        die(f"app dir missing: {app}")
+
+    meta_p = app / "tracking" / "job-meta.json"
+    jd_p = app / "jd" / "jd-raw.txt"
+    if not meta_p.exists(): die(f"missing: {meta_p}")
+    if not jd_p.exists(): die(f"missing: {jd_p}")
+    if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
+
+    meta = load_json(meta_p)
+    text = norm(jd_p.read_text(errors="ignore"))
+
+    templ_root = Path.home() / "secondbrain/03_assets/templates/resumes" / args.family
+    if not templ_root.is_dir():
+        die(f"template root missing: {templ_root}")
+
+    rows = []
+    for sig_p in templ_root.rglob("signals.json"):
+        sig = load_json(sig_p)
+        tid = sig.get("template_id", "??")
+        slug = sig.get("template_slug", sig_p.parent.name)
+        sc, hp, hn, ha, lang, tool = score(sig, text)
+        rows.append((sc, tid, slug, sig_p.parent, hp, hn, ha, lang, tool, sig))
+
+    if not rows:
+        die(f"no signals.json found under: {templ_root}")
+
+    rows.sort(key=lambda r: r[0], reverse=True)
+    top = rows[: max(1, args.top)]
+
+    print(f"APP: {app}")
+    print(f"JOB: {meta.get('company','?')} | {meta.get('role_title','?')} | date_found={meta.get('date_found','?')} | status={meta.get('status','?')}")
+    print()
+
+    print(f"{'RANK':>4}  {'SCORE':>5}  {'TEMPLATE':32}  {'STACK':22}  {'WHY'}")
+    print("-" * 120)
+
+    for i, (sc, tid, slug, folder, hp, hn, ha, lang, tool, sig) in enumerate(top, start=1):
+        stack = f"{lang}/{tool}" if (lang or tool) else "-"
+        why = []
+        if hp: why.append("pref: " + ", ".join(hp[:6]))
+        if hn: why.append("neut: " + ", ".join(hn[:6]))
+        if ha: why.append("anti: " + ", ".join(ha[:4]))
+        if not why: why = ["no keyword hits; stack cues only"]
+        print(f"{i:>4}  {sc:>5}  {cut(f'{tid}_{slug}',32):32}  {cut(stack,22):22}  {cut(' | '.join(why), 240)}")
+
+    best = top[0]
+    print("\nBest pick:")
+    print(f"- template_id: {best[1]}")
+    print(f"- template_slug: {best[2]}")
+    print(f"- template_path: {best[3]}")
+
+if __name__ == "__main__":
+    main()
