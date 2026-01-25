@@ -1,0 +1,219 @@
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/resume/bin/python
+import argparse, json, re
+from pathlib import Path
+
+def die(msg: str, code=1):
+    print(f"ERROR: {msg}")
+    raise SystemExit(code)
+
+def load_json(p: Path):
+    try:
+        return json.loads(p.read_text())
+    except Exception as e:
+        die(f"invalid JSON: {p} ({e})")
+
+def norm(s: str) -> str:
+    s = (s or "").lower()
+    s = s.replace("\u2019", "'")
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def has(t: str, kw: str) -> bool:
+    kw = (kw or "").strip().lower()
+    return bool(kw) and kw in t
+
+def cut(s: str, n: int) -> str:
+    s = (s or "").strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+def score(sig: dict, text: str) -> tuple[int, list[str], list[str], list[str]]:
+    pref = [k for k in sig.get("preferred_keywords", []) if isinstance(k, str)]
+    neut = [k for k in sig.get("neutral_keywords", []) if isinstance(k, str)]
+    anti = [k for k in sig.get("anti_signals", []) if isinstance(k, str)]
+
+    hits_pref = [k for k in pref if has(text, k)]
+    hits_neut = [k for k in neut if has(text, k)]
+    hits_anti = [k for k in anti if has(text, k)]
+
+    sc = 0
+    sc += 10 * len(hits_pref)
+    sc += 2 * len(hits_neut)
+    sc -= 12 * len(hits_anti)
+
+    ps = sig.get("primary_stack", {}) or {}
+    lang = (ps.get("language") or "").lower()
+    tool = (ps.get("automation_tool") or "").lower()
+    if lang and has(text, lang): sc += 6
+    if tool and has(text, tool): sc += 8
+
+    # explicit mapping: Cypress roles map best to TS/JS modern browser automation
+    if has(text, "cypress") and sig.get("template_id") == "04":
+        sc += 10
+
+    return sc, hits_pref, hits_neut, hits_anti
+
+def select_template(family_root: Path, text: str) -> dict:
+    rows = []
+    for sig_p in family_root.rglob("signals.json"):
+        sig = load_json(sig_p)
+        sc, hp, hn, ha = score(sig, text)
+        rows.append({
+            "score": sc,
+            "sig": sig,
+            "path": sig_p.parent,
+            "hits_pref": hp,
+            "hits_neut": hn,
+            "hits_anti": ha,
+        })
+    if not rows:
+        die(f"no signals.json found under: {family_root}")
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    return rows[0], rows
+
+def docx_extract_sections(docx_path: Path):
+    try:
+        from docx import Document
+    except Exception as e:
+        die(f"python-docx not available in this interpreter: {e}")
+
+    if not docx_path.exists():
+        die(f"missing template docx: {docx_path}")
+
+    doc = Document(str(docx_path))
+    paras = []
+    for p in doc.paragraphs:
+        txt = (p.text or "").strip()
+        if not txt:
+            continue
+        style = (p.style.name if p.style else "") or ""
+        is_bullet = ("List" in style) or bool(p._p.pPr is not None and p._p.pPr.numPr is not None)
+        paras.append({"text": txt, "style": style, "bullet": is_bullet})
+
+    # Heuristic section finding by heading text
+    def find_idx(keys):
+        keys = [k.lower() for k in keys]
+        for i, it in enumerate(paras):
+            t = it["text"].lower()
+            if any(k in t for k in keys) and len(t) <= 40:
+                return i
+        return None
+
+    idx_summary = find_idx(["summary", "professional summary"])
+    idx_skills  = find_idx(["skills", "core skills", "technical skills"])
+    idx_exp     = find_idx(["experience", "professional experience", "work experience"])
+
+    # Collect blocks after heading until next heading-ish line
+    def collect_after(idx, max_lines=20):
+        if idx is None:
+            return []
+        out = []
+        for it in paras[idx+1:]:
+            t = it["text"]
+            tl = t.lower()
+            # stop at next section heading-ish (short + common headings)
+            if len(tl) <= 40 and any(k in tl for k in ["summary", "skills", "experience", "education", "certification", "projects"]):
+                break
+            out.append(it)
+            if len(out) >= max_lines:
+                break
+        return out
+
+    # Fallback: if heading not found, just return the first N lines
+    if idx_summary is None and idx_skills is None and idx_exp is None:
+        return {"summary": paras[:8], "skills": paras[:12], "experience": paras[:18], "raw": paras[:40]}
+
+    return {
+        "summary": collect_after(idx_summary, 10) if idx_summary is not None else [],
+        "skills": collect_after(idx_skills, 16) if idx_skills is not None else [],
+        "experience": collect_after(idx_exp, 18) if idx_exp is not None else [],
+        "raw": paras[:40],
+        "idx": {"summary": idx_summary, "skills": idx_skills, "experience": idx_exp},
+    }
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--app", required=True, help="Application folder")
+    ap.add_argument("--family", default="qa_automation_engineer")
+    ap.add_argument("--show-all-scores", action="store_true", help="Show all template scores (debug)")
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser()
+    if not app.is_dir():
+        die(f"app dir missing: {app}")
+
+    meta_p = app / "tracking" / "job-meta.json"
+    jd_p   = app / "jd" / "jd-raw.txt"
+    if not meta_p.exists(): die(f"missing: {meta_p}")
+    if not jd_p.exists(): die(f"missing: {jd_p}")
+    if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
+
+    meta = load_json(meta_p)
+    jd_text_raw = jd_p.read_text(errors="ignore")
+    jd_text = norm(jd_text_raw)
+
+    family_root = Path.home() / "secondbrain/03_assets/templates/resumes" / args.family
+    if not family_root.is_dir():
+        die(f"template family root missing: {family_root}")
+
+    best, rows = select_template(family_root, jd_text)
+    sig = best["sig"]
+    template_id = sig.get("template_id", "??")
+    template_slug = sig.get("template_slug", best["path"].name)
+    template_path = best["path"]
+    docx_path = template_path / "resume-master.docx"
+
+    print(f"APP: {app}")
+    print(f"JOB: {meta.get('company','?')} | {meta.get('role_title','?')} | date_found={meta.get('date_found','?')} | status={meta.get('status','?')}")
+    print()
+    print("TEMPLATE (auto-selected):")
+    print(f"- template_id: {template_id}")
+    print(f"- template_slug: {template_slug}")
+    print(f"- template_path: {template_path}")
+    print(f"- resume-master.docx: {docx_path}")
+    print()
+
+    if args.show_all_scores:
+        print("All template scores:")
+        for r in sorted(rows, key=lambda x: x["score"], reverse=True):
+            sid = r["sig"].get("template_id","??")
+            sslug = r["sig"].get("template_slug", r["path"].name)
+            print(f"- {sid}_{sslug}: {r['score']}")
+        print()
+
+    print("JD quick stats:")
+    lines = jd_text_raw.splitlines()
+    print(f"- lines: {len(lines)}")
+    print(f"- first: {cut(lines[0] if lines else '', 90)}")
+    print(f"- last : {cut(lines[-1] if lines else '', 90)}")
+    print()
+
+    print("Keyword hits (selected template):")
+    hp = best["hits_pref"]; hn = best["hits_neut"]; ha = best["hits_anti"]
+    print(f"- preferred ({len(hp)}): {', '.join(hp[:20]) if hp else '-'}")
+    print(f"- neutral   ({len(hn)}): {', '.join(hn[:20]) if hn else '-'}")
+    print(f"- anti      ({len(ha)}): {', '.join(ha[:20]) if ha else '-'}")
+    print()
+
+    sections = docx_extract_sections(docx_path)
+
+    def dump_block(title, items, max_lines):
+        print(title)
+        if not items:
+            print("(not found by heading heuristic)")
+            print()
+            return
+        for it in items[:max_lines]:
+            prefix = "- " if it.get("bullet") else ""
+            print(prefix + it["text"])
+        print()
+
+    dump_block("TEMPLATE PREVIEW: SUMMARY (heuristic)", sections.get("summary", []), 10)
+    dump_block("TEMPLATE PREVIEW: SKILLS (heuristic)", sections.get("skills", []), 16)
+    dump_block("TEMPLATE PREVIEW: EXPERIENCE (heuristic)", sections.get("experience", []), 18)
+
+    print("NOTE:")
+    print("- This is READ-ONLY: no files written.")
+    print("- If headings aren't detected in your DOCX, we’ll add a template-specific locator map next.")
+
+if __name__ == "__main__":
+    main()
