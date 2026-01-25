@@ -1,0 +1,37 @@
+{
+  "schema": "rf_signals_v2",
+  "template_id": "04",
+  "template_slug": "04_typescript_playwright",
+  "family": "qa_automation_engineer",
+
+  "primary_stack": {
+    "language": "typescript",
+    "automation_tool": "playwright"
+  },
+
+  "preferred_keywords": [
+    "typescript",
+    "javascript",
+    "playwright",
+    "node",
+    "npm",
+    "ui automation",
+    "e2e",
+    "ci/cd"
+  ],
+
+  "neutral_keywords": [
+    "api testing",
+    "postman",
+    "sql",
+    "docker",
+    "cypress"
+  ],
+
+  "anti_signals": [
+    "java (only)",
+    "python (only)"
+  ],
+
+  "notes": "Pick when TS/JS Playwright is the clear ask (JetBrains-style stacks)."
+}

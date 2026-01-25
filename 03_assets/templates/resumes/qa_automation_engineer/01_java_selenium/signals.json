@@ -1,0 +1,39 @@
+{
+  "schema": "rf_signals_v2",
+  "template_id": "01",
+  "template_slug": "01_java_selenium",
+  "family": "qa_automation_engineer",
+
+  "primary_stack": {
+    "language": "java",
+    "automation_tool": "selenium"
+  },
+
+  "preferred_keywords": [
+    "selenium",
+    "webdriver",
+    "testng",
+    "junit",
+    "maven",
+    "page object model",
+    "pom",
+    "java"
+  ],
+
+  "neutral_keywords": [
+    "api testing",
+    "rest assured",
+    "postman",
+    "ci/cd",
+    "jenkins",
+    "github actions",
+    "sql"
+  ],
+
+  "anti_signals": [
+    "playwright (only)",
+    "cypress (only)"
+  ],
+
+  "notes": "Default pick when Java + Selenium dominates or Playwright is not central."
+}
