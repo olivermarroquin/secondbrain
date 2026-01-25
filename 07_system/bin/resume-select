@@ -50,6 +50,9 @@ def score(sig: dict, text: str):
 
     if lang and has(text, lang): sc += 6
     if tool and has(text, tool): sc += 8
+    # explicit mapping: Cypress roles map best to TS/JS modern browser automation
+    if has(text, "cypress") and sig.get("template_id") == "04":
+        sc += 10
 
     return sc, hits_pref, hits_neut, hits_anti, lang, tool
 
@@ -105,7 +108,7 @@ def main():
         if hn: why.append("neut: " + ", ".join(hn[:6]))
         if ha: why.append("anti: " + ", ".join(ha[:4]))
         if not why: why = ["no keyword hits; stack cues only"]
-        print(f"{i:>4}  {sc:>5}  {cut(f'{tid}_{slug}',32):32}  {cut(stack,22):22}  {cut(' | '.join(why), 240)}")
+        print(f"{i:>4}  {sc:>5}  {cut(f"{tid}_{slug.split('_',1)[-1]}",32):32}  {cut(stack,22):22}  {cut(' | '.join(why), 240)}")
 
     best = top[0]
     print("\nBest pick:")
