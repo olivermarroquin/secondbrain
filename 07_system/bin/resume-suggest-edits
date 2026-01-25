@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+import argparse, json, re
+from pathlib import Path
+
+def die(msg: str, code=1):
+    print(f"ERROR: {msg}")
+    raise SystemExit(code)
+
+def load_json(p: Path):
+    try:
+        return json.loads(p.read_text())
+    except Exception as e:
+        die(f"invalid JSON: {p} ({e})")
+
+def norm(s: str) -> str:
+    s = (s or "").lower()
+    s = s.replace("\u2019", "'")
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def has(t: str, kw: str) -> bool:
+    kw = (kw or "").strip().lower()
+    return bool(kw) and kw in t
+
+def pick_template(app: Path, family: str) -> dict:
+    # minimal: choose highest-scoring template using same logic as resume-select v2
+    meta_p = app / "tracking" / "job-meta.json"
+    jd_p = app / "jd" / "jd-raw.txt"
+    if not meta_p.exists(): die(f"missing: {meta_p}")
+    if not jd_p.exists(): die(f"missing: {jd_p}")
+    if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
+    text = norm(jd_p.read_text(errors="ignore"))
+
+    templ_root = Path.home() / "secondbrain/03_assets/templates/resumes" / family
+    if not templ_root.is_dir(): die(f"template root missing: {templ_root}")
+
+    best = None
+    for sig_p in templ_root.rglob("signals.json"):
+        sig = load_json(sig_p)
+        pref = sig.get("preferred_keywords", [])
+        neut = sig.get("neutral_keywords", [])
+        anti = sig.get("anti_signals", [])
+        sc = 0
+        hp = [k for k in pref if isinstance(k,str) and has(text,k)]
+        hn = [k for k in neut if isinstance(k,str) and has(text,k)]
+        ha = [k for k in anti if isinstance(k,str) and has(text,k)]
+        sc += 10*len(hp) + 2*len(hn) - 12*len(ha)
+        ps = sig.get("primary_stack", {}) or {}
+        lang = (ps.get("language") or "").lower()
+        tool = (ps.get("automation_tool") or "").lower()
+        if lang and has(text, lang): sc += 6
+        if tool and has(text, tool): sc += 8
+        if has(text,"cypress") and sig.get("template_id")=="04": sc += 10
+
+        row = {"score": sc, "sig": sig, "path": str(sig_p.parent)}
+        if (best is None) or sc > best["score"]:
+            best = row
+
+    if best is None:
+        die("no templates found")
+    return best
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--app", required=True)
+    ap.add_argument("--template", default="auto", help="01|02|03|04 or 'auto'")
+    ap.add_argument("--family", default="qa_automation_engineer")
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser()
+    if not app.is_dir(): die(f"app dir missing: {app}")
+
+    meta = load_json(app / "tracking" / "job-meta.json")
+    jd_p = app / "jd" / "jd-raw.txt"
+    if not jd_p.exists(): die(f"missing: {jd_p}")
+    if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
+    text = norm(jd_p.read_text(errors="ignore"))
+
+    templ_root = Path.home() / "secondbrain/03_assets/templates/resumes" / args.family
+
+    if args.template == "auto":
+        chosen = pick_template(app, args.family)
+        sig = chosen["sig"]
+        template_id = sig.get("template_id","??")
+        template_slug = sig.get("template_slug","?")
+        template_path = chosen["path"]
+    else:
+        template_id = args.template
+        sig_p = templ_root / {
+            "01":"01_java_selenium",
+            "02":"02_java_playwright_migration",
+            "03":"03_python_playwright",
+            "04":"04_typescript_playwright"
+        }.get(template_id, "")
+        if not sig_p:
+            die("unknown --template (use 01/02/03/04 or auto)")
+        sig = load_json(sig_p / "signals.json")
+        template_slug = sig.get("template_slug", sig_p.name)
+        template_path = str(sig_p)
+
+    # extract “signals” from JD for edit suggestions
+    wants = {
+        "api": any(has(text,k) for k in ["api testing","rest api","rest","graphql","postman","rest assured"]),
+        "cicd": any(has(text,k) for k in ["ci/cd","jenkins","github actions","azure devops","pipeline"]),
+        "sql": any(has(text,k) for k in ["sql","postgres","oracle","mysql","database"]),
+        "cloud": any(has(text,k) for k in ["aws","azure","gcp","cloud"]),
+        "perf": any(has(text,k) for k in ["performance","jmeter","load test","k6","gatling"]),
+        "mobile": any(has(text,k) for k in ["mobile","appium","ios","android"]),
+        "cypress": has(text,"cypress"),
+        "playwright": has(text,"playwright"),
+        "selenium": has(text,"selenium"),
+        "typescript": any(has(text,k) for k in ["typescript","javascript","node","npm"]),
+        "python": any(has(text,k) for k in ["python","pytest"]),
+        "java": has(text,"java"),
+    }
+
+    print(f"APP: {app}")
+    print(f"JOB: {meta.get('company','?')} | {meta.get('role_title','?')} | date_found={meta.get('date_found','?')}")
+    print(f"TEMPLATE (selected): {template_id} {template_slug}")
+    print(f"TEMPLATE PATH: {template_path}")
+    print()
+
+    edits = []
+    n = 1
+
+    # Stack alignment edits (template-specific)
+    if template_id == "04":
+        if wants["cypress"]:
+            edits.append((n, "Core Skills", "ADD", "Cypress (E2E) alongside Playwright; note migration/parallel support if true."))
+            n += 1
+        if wants["typescript"]:
+            edits.append((n, "Core Skills", "ADD", "TypeScript/JavaScript + Node/NPM tooling emphasized near top."))
+            n += 1
+        if wants["api"]:
+            edits.append((n, "Core Skills", "ADD", "API testing emphasis (Postman + one automation library you actually use)."))
+            n += 1
+    elif template_id == "02":
+        if wants["playwright"]:
+            edits.append((n, "Core Skills", "ADD", "Playwright-Java emphasized; include Selenium→Playwright migration bullet if true."))
+            n += 1
+    elif template_id == "01":
+        if wants["selenium"]:
+            edits.append((n, "Core Skills", "ADD", "Selenium WebDriver + POM/TestNG emphasized; keep Playwright secondary if mentioned."))
+            n += 1
+    elif template_id == "03":
+        if wants["python"]:
+            edits.append((n, "Core Skills", "ADD", "Pytest fixtures/parametrization and Playwright-Python highlighted."))
+            n += 1
+
+    # Cross-cutting emphasis suggestions
+    if wants["cicd"]:
+        edits.append((n, "Tools/DevOps", "ADD", "CI/CD pipeline validation (Jenkins/GitHub Actions/Azure DevOps) + reporting artifacts."))
+        n += 1
+    if wants["sql"]:
+        edits.append((n, "Experience bullets", "ADD", "SQL-backed validation (assert DB state matches UI/API outcomes)."))
+        n += 1
+    if wants["cloud"]:
+        edits.append((n, "Tools/Platforms", "ADD", "Cloud test execution context (AWS/Azure) if actually used."))
+        n += 1
+    if wants["perf"]:
+        edits.append((n, "Testing Scope", "ADD", "Performance testing tooling (only if real) + what you measured (latency/throughput)."))
+        n += 1
+    if wants["mobile"]:
+        edits.append((n, "Testing Scope", "ADD", "Mobile automation coverage (Appium) only if real; otherwise do not add."))
+        n += 1
+
+    # Quality guardrail edits
+    edits.append((n, "Summary", "CHANGE", "Align first 1–2 lines to the JD’s primary stack + scope (UI/API/CI). No extra tools not in JD or your resume."))
+    n += 1
+    edits.append((n, "Experience", "CHANGE", "Add 1 JD-aligned bullet per recent role (framework, CI, API/DB validation). Keep it localized."))
+    n += 1
+
+    print("Proposed localized edits (READ-ONLY):")
+    for (idx, section, action, detail) in edits:
+        print(f"{idx}. [{section}] {action}: {detail}")
+
+    print("\nRules:")
+    print("- These are suggestions only; nothing is written.")
+    print("- Do not add tools you can’t defend in an interview.")
+    print("- Next step (later): approve edit numbers, then generate final resume artifact.")
+
+if __name__ == "__main__":
+    main()
