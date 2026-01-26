@@ -1,0 +1,29 @@
+{
+  "schema": "rf_emphasis_tags_v1",
+  "tags": {
+    "api": {
+      "phrases": ["api testing", "rest api", "restful", "postman", "rest assured", "contract testing", "swagger", "openapi"],
+      "tokens": ["api", "rest", "soap"]
+    },
+    "perf": {
+      "phrases": ["performance testing", "load testing", "stress testing", "jmeter", "k6", "gatling"],
+      "tokens": ["jmeter", "k6"]
+    },
+    "cloud": {
+      "phrases": ["aws", "azure", "gcp", "cloud", "kubernetes", "docker", "container", "ci/cd", "github actions", "jenkins"],
+      "tokens": ["aws", "azure", "gcp"]
+    },
+    "mobile": {
+      "phrases": ["appium", "mobile testing", "ios", "android"],
+      "tokens": ["appium", "ios", "android"]
+    },
+    "etl": {
+      "phrases": ["etl", "data pipeline", "data warehouse", "snowflake", "airflow"],
+      "tokens": ["etl"]
+    },
+    "ai_ml": {
+      "phrases": ["machine learning", "artificial intelligence", "computer vision", "nlp", "genai"],
+      "tokens": ["ai", "ml", "llm"]
+    }
+  }
+}
