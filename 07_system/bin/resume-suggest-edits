@@ -1,6 +1,9 @@
-#!/usr/bin/env python3
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/resume/bin/python
 import argparse, json, re
 from pathlib import Path
+from datetime import datetime, timezone
+
+from docx import Document
 
 def die(msg: str, code=1):
     print(f"ERROR: {msg}")
@@ -18,166 +21,402 @@ def norm(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s
 
-def has(t: str, kw: str) -> bool:
+def cut(s: str, n: int) -> str:
+    s = (s or "").strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+def has(text: str, kw: str) -> bool:
     kw = (kw or "").strip().lower()
-    return bool(kw) and kw in t
+    return bool(kw) and kw in text
 
-def pick_template(app: Path, family: str) -> dict:
-    # minimal: choose highest-scoring template using same logic as resume-select v2
-    meta_p = app / "tracking" / "job-meta.json"
-    jd_p = app / "jd" / "jd-raw.txt"
-    if not meta_p.exists(): die(f"missing: {meta_p}")
-    if not jd_p.exists(): die(f"missing: {jd_p}")
-    if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
-    text = norm(jd_p.read_text(errors="ignore"))
+def score(sig: dict, text: str) -> tuple[int, list[str], list[str], list[str]]:
+    pref = [k for k in sig.get("preferred_keywords", []) if isinstance(k, str)]
+    neut = [k for k in sig.get("neutral_keywords", []) if isinstance(k, str)]
+    anti = [k for k in sig.get("anti_signals", []) if isinstance(k, str)]
 
-    templ_root = Path.home() / "secondbrain/03_assets/templates/resumes" / family
-    if not templ_root.is_dir(): die(f"template root missing: {templ_root}")
+    hits_pref = [k for k in pref if has(text, k)]
+    hits_neut = [k for k in neut if has(text, k)]
+    hits_anti = [k for k in anti if has(text, k)]
 
-    best = None
-    for sig_p in templ_root.rglob("signals.json"):
+    sc = 0
+    sc += 10 * len(hits_pref)
+    sc += 2 * len(hits_neut)
+    sc -= 12 * len(hits_anti)
+
+    ps = sig.get("primary_stack", {}) or {}
+    lang = (ps.get("language") or "").lower()
+    tool = (ps.get("automation_tool") or "").lower()
+    if lang and has(text, lang): sc += 6
+    if tool and has(text, tool): sc += 8
+
+    # role bias: Cypress → TS/JS modern web automation
+    if has(text, "cypress") and str(sig.get("template_id","")) == "04":
+        sc += 10
+
+    return sc, hits_pref, hits_neut, hits_anti
+
+def select_template(family_root: Path, jd_text_norm: str, requested: str):
+    rows = []
+    for sig_p in family_root.rglob("signals.json"):
         sig = load_json(sig_p)
-        pref = sig.get("preferred_keywords", [])
-        neut = sig.get("neutral_keywords", [])
-        anti = sig.get("anti_signals", [])
-        sc = 0
-        hp = [k for k in pref if isinstance(k,str) and has(text,k)]
-        hn = [k for k in neut if isinstance(k,str) and has(text,k)]
-        ha = [k for k in anti if isinstance(k,str) and has(text,k)]
-        sc += 10*len(hp) + 2*len(hn) - 12*len(ha)
-        ps = sig.get("primary_stack", {}) or {}
-        lang = (ps.get("language") or "").lower()
-        tool = (ps.get("automation_tool") or "").lower()
-        if lang and has(text, lang): sc += 6
-        if tool and has(text, tool): sc += 8
-        if has(text,"cypress") and sig.get("template_id")=="04": sc += 10
+        sc, hp, hn, ha = score(sig, jd_text_norm)
+        rows.append({
+            "score": sc,
+            "sig": sig,
+            "path": sig_p.parent,
+            "hits_pref": hp,
+            "hits_neut": hn,
+            "hits_anti": ha,
+        })
+    if not rows:
+        die(f"no signals.json found under: {family_root}")
 
-        row = {"score": sc, "sig": sig, "path": str(sig_p.parent)}
-        if (best is None) or sc > best["score"]:
-            best = row
+    if requested != "auto":
+        req = requested.strip().lower()
+        # allow "04", "04_typescript_playwright", "typescript_playwright"
+        for r in rows:
+            tid = str(r["sig"].get("template_id","")).zfill(2)
+            slug = (r["sig"].get("template_slug") or r["path"].name).lower()
+            if req == tid or req == slug or req == slug.replace(tid + "_","") or req == r["path"].name.lower():
+                return r, sorted(rows, key=lambda x: x["score"], reverse=True)
+        die(f"requested template not found: {requested}")
 
-    if best is None:
-        die("no templates found")
-    return best
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    return rows[0], rows
+
+def read_docx_lines(docx_path: Path):
+    if not docx_path.exists():
+        die(f"missing resume-master.docx: {docx_path}")
+    doc = Document(str(docx_path))
+    out = []
+    for p in doc.paragraphs:
+        t = (p.text or "").rstrip()
+        if not t.strip():
+            out.append("")  # preserve blank separator
+            continue
+        out.append(t)
+    # collapse excessive blank runs
+    cleaned = []
+    prev_blank = False
+    for t in out:
+        blank = (t.strip() == "")
+        if blank and prev_blank:
+            continue
+        cleaned.append(t)
+        prev_blank = blank
+    return cleaned
+
+def locate_sections(lines: list[str]):
+    """
+    Deterministic locator aligned to your templates:
+    - HEADER: name/title/contact lines before PROFESSIONAL SUMMARY
+    - SUMMARY: from PROFESSIONAL SUMMARY to TECHNICAL SKILL(S) (or SKILLS)
+    - SKILLS: from TECHNICAL SKILL(S) to EXPERIENCE (or first job-ish line)
+    - EXP: from EXPERIENCE (or first job-ish line) to end
+    """
+    def trim(block):
+        while block and block[0].strip() == "":
+            block = block[1:]
+        while block and block[-1].strip() == "":
+            block = block[:-1]
+        return block
+
+    idx_prof = None
+    idx_tech = None
+    idx_exp = None
+
+    for i, t in enumerate(lines):
+        tl = t.strip().lower()
+        tl2 = tl.rstrip(":")
+        if idx_prof is None and (tl2 in ("professional summary", "summary", "profile", "professional profile")):
+            idx_prof = i
+            continue
+        if idx_tech is None and (("technical skill" in tl2) or tl2 in ("skills", "technical skills")):
+            idx_tech = i
+            continue
+        if idx_exp is None:
+            if tl2 in ("experience", "professional experience", "work experience"):
+                idx_exp = i
+                continue
+            # job-ish line: Month YYYY -- Present/Month YYYY
+            if re.search(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b.*\b\d{4}\b\s*[-–—]{1,2}\s*(?:present|\b\d{4}\b)", tl2):
+                idx_exp = i
+                continue
+            if re.search(r"\b\d{4}\b\s*[-–—]{1,2}\s*(?:present|\b\d{4}\b)", tl2) and len(tl2) <= 120:
+                idx_exp = i
+
+    if idx_prof is None:
+        idx_prof = 0
+
+    if idx_tech is None:
+        idx_tech = idx_exp if idx_exp is not None else min(len(lines), idx_prof + 12)
+
+    if idx_exp is None:
+        idx_exp = len(lines)
+
+    header = trim(lines[:idx_prof])
+    summary = trim(lines[idx_prof:idx_tech])
+    skills = trim(lines[idx_tech:idx_exp])
+    exp = trim(lines[idx_exp:])
+
+    return header, summary, skills, exp
+
+def find_line_idx(block: list[str], pattern: str):
+    rx = re.compile(pattern, re.I)
+    for i, t in enumerate(block):
+        if rx.search(t):
+            return i
+    return None
+
+def make_proposals(jd_norm: str, template_id: str, summary: list[str], skills: list[str], exp: list[str], hits: dict):
+    proposals = []
+    pid = 1
+
+    summary_norm = norm("\n".join(summary))
+    skills_norm  = norm("\n".join(skills))
+    exp_norm     = norm("\n".join(exp))
+    def first_summary_content_idx():
+        for i, line in enumerate(summary):
+            t = (line or '').strip()
+            if not t:
+                continue
+            tl = t.lower().rstrip(':')
+            if tl in ('professional summary','summary','profile','professional profile'):
+                continue
+            return i
+        return None
+
+    def first_summary_content_idx():
+        for i, line in enumerate(summary):
+            t = (line or '').strip()
+            if not t:
+                continue
+            tl = t.lower().rstrip(':')
+            if tl in ('professional summary','summary','profile','professional profile'):
+                continue
+            return i
+        return None
+
+
+    def first_summary_content_idx():
+        for i, line in enumerate(summary):
+            t = (line or "").strip()
+            if not t:
+                continue
+            tl = t.lower().rstrip(":")
+            if tl in ("professional summary", "summary", "profile", "professional profile"):
+                continue
+            return i
+        return None
+
+
+    def add(section, op, before_lines, after_lines, rationale):
+        nonlocal pid
+        proposals.append({
+            "id": pid,
+            "section": section,
+            "op": op,
+            "before": before_lines,
+            "after": after_lines,
+            "rationale": rationale
+        })
+        pid += 1
+
+    # ---- Targeted, safe, localized edits ----
+
+    # A) Cypress mention: prefer adding to Automation Frameworks line if exists
+    if has(jd_norm, "cypress") and not has(skills_norm, "cypress") and not has(summary_norm, "cypress"):
+        idx = find_line_idx(skills, r"automation framework")
+        if idx is not None:
+            before = [skills[idx]]
+            line = skills[idx]
+            # append Cypress only if not already there
+            if "cypress" not in line.lower():
+                after_line = line.rstrip()
+                # keep punctuation style
+                if ":" in after_line:
+                    head, tail = after_line.split(":", 1)
+                    after_line = f"{head}: {tail.strip()}, Cypress (E2E)"
+                else:
+                    after_line = after_line + ", Cypress (E2E)"
+                add(
+                    "SKILLS",
+                    "REPLACE_LINE",
+                    before,
+                    [after_line],
+                    "JD contains cypress; add to Automation Frameworks for stack match."
+                )
+    # B) TypeScript/JavaScript emphasis: if JD hits and summary doesn't mention both
+    if (has(jd_norm, 'typescript') or has(jd_norm, 'javascript')):
+        need_ts = has(jd_norm, 'typescript') and not has(summary_norm, 'typescript')
+        need_js = has(jd_norm, 'javascript') and not has(summary_norm, 'javascript')
+        if need_ts or need_js:
+            tgt = first_summary_content_idx()
+            if tgt is not None:
+                before = [summary[tgt]]
+                after = summary[tgt]
+                if need_ts and 'typescript' not in after.lower():
+                    after = after.rstrip('.') + ' using TypeScript.'
+                if need_js and 'javascript' not in after.lower():
+                    after = after.rstrip('.') + ' using JavaScript.'
+                add(
+                    'SUMMARY',
+                    'REPLACE_LINE',
+                    before,
+                    [after],
+                    'JD stack includes TypeScript/JavaScript; reflect in Professional Summary content.'
+                )
+
+    # C) CI/CD mention:
+
+    if has(jd_norm, "ci/cd") and not has(summary_norm, "ci/cd") and not has(summary_norm, "cicd"):
+        # find a summary line with "ci" tooling mention or add to 3rd line
+        tgt = min(2, len(summary)-1) if summary else None
+        if tgt is not None and tgt >= 0:
+            before = [summary[tgt]]
+            after = summary[tgt].rstrip(".") + " with CI/CD pipeline validation."
+            add(
+                "SUMMARY",
+                "REPLACE_LINE",
+                before,
+                [after],
+                "JD includes CI/CD; add explicit CI/CD mention in summary."
+            )
+
+    # D) API testing: if JD hits and skills lacks API testing, add to skills (Automation Frameworks or Tools)
+    if (has(jd_norm, "api") or has(jd_norm, "rest")) and not has(skills_norm, "api testing"):
+        idx = find_line_idx(skills, r"(postman|rest assured|api)")
+        if idx is not None:
+            # expand that existing line lightly
+            before = [skills[idx]]
+            after = skills[idx]
+            if "api testing" not in after.lower():
+                after = after.rstrip(".") + " (API testing)."
+            add(
+                "SKILLS",
+                "REPLACE_LINE",
+                before,
+                [after],
+                "JD includes API/REST; make API testing explicit in skills line that already references API tools."
+            )
+
+    # E) If none produced, still return empty proposals (valid)
+    return proposals
+
+def print_diff(proposals):
+    if not proposals:
+        print("Proposed localized edits (READ-ONLY): none (no safe diffs detected).")
+        return
+    print("Proposed localized edits (READ-ONLY) — with BEFORE/AFTER:")
+    for p in proposals:
+        print(f"{p['id']}. [{p['section']}] {p['op']}")
+        print("BEFORE:")
+        if p["before"]:
+            for line in p["before"]:
+                print(f"  {line}")
+        else:
+            print("  (none)")
+        print("AFTER:")
+        if p["after"]:
+            for line in p["after"]:
+                print(f"  {line}")
+        else:
+            print("  (none)")
+        print(f"RATIONALE: {p['rationale']}")
+        print()
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app", required=True)
-    ap.add_argument("--template", default="auto", help="01|02|03|04 or 'auto'")
+    ap.add_argument("--template", default="auto", help="auto|template_id|template_slug")
+    ap.add_argument("--diff", action="store_true", help="Show BEFORE/AFTER diffs (recommended)")
     ap.add_argument("--family", default="qa_automation_engineer")
+    ap.add_argument("--no-write", action="store_true", help="Do not write edit-proposals.json")
     args = ap.parse_args()
 
     app = Path(args.app).expanduser()
-    if not app.is_dir(): die(f"app dir missing: {app}")
+    if not app.is_dir():
+        die(f"app dir missing: {app}")
 
-    meta = load_json(app / "tracking" / "job-meta.json")
+    jm_p = app / "tracking" / "job-meta.json"
     jd_p = app / "jd" / "jd-raw.txt"
+    if not jm_p.exists(): die(f"missing: {jm_p}")
     if not jd_p.exists(): die(f"missing: {jd_p}")
     if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
-    text = norm(jd_p.read_text(errors="ignore"))
 
-    templ_root = Path.home() / "secondbrain/03_assets/templates/resumes" / args.family
+    jm = load_json(jm_p)
+    jd_raw = jd_p.read_text(errors="ignore")
+    jd_norm = norm(jd_raw)
 
-    if args.template == "auto":
-        chosen = pick_template(app, args.family)
-        sig = chosen["sig"]
-        template_id = sig.get("template_id","??")
-        template_slug = sig.get("template_slug","?")
-        template_path = chosen["path"]
-    else:
-        template_id = args.template
-        sig_p = templ_root / {
-            "01":"01_java_selenium",
-            "02":"02_java_playwright_migration",
-            "03":"03_python_playwright",
-            "04":"04_typescript_playwright"
-        }.get(template_id, "")
-        if not sig_p:
-            die("unknown --template (use 01/02/03/04 or auto)")
-        sig = load_json(sig_p / "signals.json")
-        template_slug = sig.get("template_slug", sig_p.name)
-        template_path = str(sig_p)
+    family_root = Path.home() / "secondbrain/03_assets/templates/resumes" / args.family
+    if not family_root.is_dir():
+        die(f"template family root missing: {family_root}")
 
-    # extract “signals” from JD for edit suggestions
-    wants = {
-        "api": any(has(text,k) for k in ["api testing","rest api","rest","graphql","postman","rest assured"]),
-        "cicd": any(has(text,k) for k in ["ci/cd","jenkins","github actions","azure devops","pipeline"]),
-        "sql": any(has(text,k) for k in ["sql","postgres","oracle","mysql","database"]),
-        "cloud": any(has(text,k) for k in ["aws","azure","gcp","cloud"]),
-        "perf": any(has(text,k) for k in ["performance","jmeter","load test","k6","gatling"]),
-        "mobile": any(has(text,k) for k in ["mobile","appium","ios","android"]),
-        "cypress": has(text,"cypress"),
-        "playwright": has(text,"playwright"),
-        "selenium": has(text,"selenium"),
-        "typescript": any(has(text,k) for k in ["typescript","javascript","node","npm"]),
-        "python": any(has(text,k) for k in ["python","pytest"]),
-        "java": has(text,"java"),
-    }
+    best, _rows = select_template(family_root, jd_norm, args.template)
+    sig = best["sig"]
+    template_id = str(sig.get("template_id","??")).zfill(2) if str(sig.get("template_id","")).isdigit() else str(sig.get("template_id","??"))
+    template_slug = sig.get("template_slug", best["path"].name)
+    template_path = best["path"]
+    docx_path = template_path / "resume-master.docx"
+
+    # Read + locate template blocks
+    lines = read_docx_lines(docx_path)
+    header, summary, skills, exp = locate_sections(lines)
+
+    proposals = make_proposals(
+        jd_norm=jd_norm,
+        template_id=template_id,
+        summary=summary,
+        skills=skills,
+        exp=exp,
+        hits={"preferred": best["hits_pref"], "neutral": best["hits_neut"], "anti": best["hits_anti"]},
+    )
 
     print(f"APP: {app}")
-    print(f"JOB: {meta.get('company','?')} | {meta.get('role_title','?')} | date_found={meta.get('date_found','?')}")
+    print(f"JOB: {jm.get('company','?')} | {jm.get('role_title','?')} | date_found={jm.get('date_found','?')}")
     print(f"TEMPLATE (selected): {template_id} {template_slug}")
     print(f"TEMPLATE PATH: {template_path}")
     print()
 
-    edits = []
-    n = 1
+    if args.diff:
+        print_diff(proposals)
+    else:
+        # legacy-ish summary list
+        if proposals:
+            print("Proposed localized edits (READ-ONLY):")
+            for p in proposals:
+                print(f"{p['id']}. [{p['section']}] {p['rationale']}")
+        else:
+            print("Proposed localized edits (READ-ONLY): none.")
+        print()
 
-    # Stack alignment edits (template-specific)
-    if template_id == "04":
-        if wants["cypress"]:
-            edits.append((n, "Core Skills", "ADD", "Cypress (E2E) alongside Playwright; note migration/parallel support if true."))
-            n += 1
-        if wants["typescript"]:
-            edits.append((n, "Core Skills", "ADD", "TypeScript/JavaScript + Node/NPM tooling emphasized near top."))
-            n += 1
-        if wants["api"]:
-            edits.append((n, "Core Skills", "ADD", "API testing emphasis (Postman + one automation library you actually use)."))
-            n += 1
-    elif template_id == "02":
-        if wants["playwright"]:
-            edits.append((n, "Core Skills", "ADD", "Playwright-Java emphasized; include Selenium→Playwright migration bullet if true."))
-            n += 1
-    elif template_id == "01":
-        if wants["selenium"]:
-            edits.append((n, "Core Skills", "ADD", "Selenium WebDriver + POM/TestNG emphasized; keep Playwright secondary if mentioned."))
-            n += 1
-    elif template_id == "03":
-        if wants["python"]:
-            edits.append((n, "Core Skills", "ADD", "Pytest fixtures/parametrization and Playwright-Python highlighted."))
-            n += 1
+    # Write proposals file (non-destructive)
+    out_dir = app / "resume_refs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_p = out_dir / "edit-proposals.json"
 
-    # Cross-cutting emphasis suggestions
-    if wants["cicd"]:
-        edits.append((n, "Tools/DevOps", "ADD", "CI/CD pipeline validation (Jenkins/GitHub Actions/Azure DevOps) + reporting artifacts."))
-        n += 1
-    if wants["sql"]:
-        edits.append((n, "Experience bullets", "ADD", "SQL-backed validation (assert DB state matches UI/API outcomes)."))
-        n += 1
-    if wants["cloud"]:
-        edits.append((n, "Tools/Platforms", "ADD", "Cloud test execution context (AWS/Azure) if actually used."))
-        n += 1
-    if wants["perf"]:
-        edits.append((n, "Testing Scope", "ADD", "Performance testing tooling (only if real) + what you measured (latency/throughput)."))
-        n += 1
-    if wants["mobile"]:
-        edits.append((n, "Testing Scope", "ADD", "Mobile automation coverage (Appium) only if real; otherwise do not add."))
-        n += 1
+    payload = {
+        "app": str(app),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "job": {
+            "company": jm.get("company"),
+            "role_title": jm.get("role_title"),
+            "date_found": jm.get("date_found"),
+        },
+        "template": {
+            "template_id": template_id,
+            "template_slug": template_slug,
+            "template_path": str(template_path),
+        },
+        "proposals": proposals,
+        "notes": "READ-ONLY proposals. These do not modify the resume. Use resume-approve-edits to approve by id."
+    }
 
-    # Quality guardrail edits
-    edits.append((n, "Summary", "CHANGE", "Align first 1–2 lines to the JD’s primary stack + scope (UI/API/CI). No extra tools not in JD or your resume."))
-    n += 1
-    edits.append((n, "Experience", "CHANGE", "Add 1 JD-aligned bullet per recent role (framework, CI, API/DB validation). Keep it localized."))
-    n += 1
-
-    print("Proposed localized edits (READ-ONLY):")
-    for (idx, section, action, detail) in edits:
-        print(f"{idx}. [{section}] {action}: {detail}")
-
-    print("\nRules:")
-    print("- These are suggestions only; nothing is written.")
-    print("- Do not add tools you can’t defend in an interview.")
-    print("- Next step (later): approve edit numbers, then generate final resume artifact.")
+    if args.no_write:
+        print("NOTE: --no-write set; not writing edit-proposals.json")
+    else:
+        out_p.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"Wrote proposals: {out_p}")
 
 if __name__ == "__main__":
     main()
