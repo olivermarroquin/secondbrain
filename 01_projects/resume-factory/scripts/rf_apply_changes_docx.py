@@ -9,11 +9,10 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-# python-docx dependency (must exist in docgen venv)
 try:
     from docx import Document  # type: ignore
 except Exception as e:
-    print("ERROR: python-docx not available. Run this using the docgen venv python:", file=sys.stderr)
+    print("ERROR: python-docx not available. Run using docgen venv python:", file=sys.stderr)
     print("  ~/secondbrain/07_system/venvs/docgen/bin/python <script> ...", file=sys.stderr)
     print(f"Import error: {e}", file=sys.stderr)
     sys.exit(2)
@@ -35,11 +34,10 @@ def read_json(p: Path):
     except json.JSONDecodeError as e:
         die(f"Invalid JSON: {p} ({e})")
 
+def norm(s: str) -> str:
+    return " ".join(s.strip().split()).lower()
+
 def parse_proposals(md: str) -> dict[int, dict]:
-    """
-    Parse proposed-changes.md into {num: {section, change, from?, to?}}.
-    Locked format from Stage 4.
-    """
     blocks: dict[int, dict] = {}
     current_n = None
     current: dict = {}
@@ -58,6 +56,14 @@ def parse_proposals(md: str) -> dict[int, dict]:
                 current["section"] = line.replace("SECTION: ", "", 1).strip()
             elif line.startswith("CHANGE: "):
                 current["change"] = line.replace("CHANGE: ", "", 1).strip().upper()
+            elif line.startswith("SUBSECTION: "):
+                current["subsection"] = line.replace("SUBSECTION: ", "", 1).strip()
+            elif line.startswith("SUBSECTION_OCCURRENCE: "):
+                raw = line.replace("SUBSECTION_OCCURRENCE: ", "", 1).strip()
+                try:
+                    current["subsection_occurrence"] = int(raw)
+                except ValueError:
+                    die(f"Invalid SUBSECTION_OCCURRENCE (must be int): {raw}")
             elif line.startswith("FROM: "):
                 current["from"] = line.replace("FROM: ", "", 1).strip()
             elif line.startswith("TO: "):
@@ -65,7 +71,6 @@ def parse_proposals(md: str) -> dict[int, dict]:
 
     if current_n is not None:
         blocks[current_n] = current
-
     return blocks
 
 def load_section_aliases(rootp: Path) -> dict:
@@ -75,14 +80,22 @@ def load_section_aliases(rootp: Path) -> dict:
     return json.loads(p.read_text(encoding="utf-8", errors="replace"))
 
 def find_heading_paragraph_index(doc: Document, candidates: list[str]) -> int:
-    cand_norm = [c.strip().lower() for c in candidates if c and c.strip()]
+    cand_norm = [norm(c) for c in candidates if c and c.strip()]
     for idx, para in enumerate(doc.paragraphs):
-        t = para.text.strip().lower()
+        t = norm(para.text)
         if not t:
             continue
         if t in cand_norm:
             return idx
     return -1
+
+def paragraph_is_major_heading(para_text: str, major_headings: list[str]) -> bool:
+    t = norm(para_text)
+    return t in {norm(h) for h in major_headings if h and h.strip()}
+
+def delete_paragraph(doc: Document, para) -> None:
+    p = para._p  # type: ignore
+    p.getparent().remove(p)  # type: ignore
 
 def list_heading_candidates(doc: Document) -> list[str]:
     out = []
@@ -92,52 +105,106 @@ def list_heading_candidates(doc: Document) -> list[str]:
             out.append(t)
     return out
 
-def apply_add(doc: Document, section: str, to_text: str, family: str, rootp: Path, anchor_para=None) -> object:
+def resolve_family_maps(family: str, rootp: Path) -> tuple[dict, list[str], dict]:
     aliases_doc = load_section_aliases(rootp)
     fam_map = (aliases_doc.get("families", {}) or {}).get(family, {}) or {}
+    major = fam_map.get("__MAJOR_HEADINGS__", []) or []
+    subs = fam_map.get("__SUBSECTIONS__", {}) or {}
+    return fam_map, major, subs
 
-    candidates = fam_map.get(section, [section])
+def section_bounds(doc: Document, section_candidates: list[str], major_headings: list[str]) -> tuple[int, int]:
+    start = find_heading_paragraph_index(doc, section_candidates)
+    if start < 0:
+        return (-1, -1)
 
-    # resolve anchor: heading paragraph (first time) or last inserted paragraph (subsequent adds)
-    if anchor_para is None:
-        idx = find_heading_paragraph_index(doc, candidates)
-        if idx < 0:
-            heads = list_heading_candidates(doc)
-            die(
-                "ADD failed: section heading not found.\n"
-                f"  SECTION: {section}\n"
-                f"  CANDIDATES: {candidates}\n"
-                "  DOCX headings seen (sample):\n    - " + "\n    - ".join(heads[:30])
-            )
-        anchor_para = doc.paragraphs[idx]
+    end = len(doc.paragraphs)
+    i = start + 1
+    while i < len(doc.paragraphs):
+        if paragraph_is_major_heading(doc.paragraphs[i].text, major_headings):
+            end = i
+            break
+        i += 1
+    return (start, end)
+
+def find_nth_subsection_anchor(doc: Document, start: int, end: int, subsection_candidates: list[str], occurrence: int):
+    cand = {norm(x) for x in subsection_candidates if x and x.strip()}
+    hits = []
+    for i in range(start, end):
+        if norm(doc.paragraphs[i].text) in cand:
+            hits.append(i)
+
+    if not hits:
+        return None, []
+    if occurrence < 1 or occurrence > len(hits):
+        return None, hits
+
+    return doc.paragraphs[hits[occurrence - 1]], hits
+
+def apply_add_subsection(doc: Document, section: str, subsection_key: str, occurrence: int, to_text: str,
+                         family: str, rootp: Path, last_anchor_map: dict):
+    fam_map, major, subs = resolve_family_maps(family, rootp)
+
+    section_candidates = fam_map.get(section, [section])
+    sec_start, sec_end = section_bounds(doc, section_candidates, major)
+    if sec_start < 0:
+        die(f"ADD failed: section not found for subsection insert: {section} candidates={section_candidates}")
+
+    subsection_candidates = subs.get(subsection_key)
+    if not subsection_candidates:
+        die(f"ADD failed: unknown SUBSECTION key '{subsection_key}' (not in __SUBSECTIONS__)")
+
+    anchor_key = (section, subsection_key, occurrence)
+
+    if anchor_key in last_anchor_map:
+        anchor_para = last_anchor_map[anchor_key]
+        new_para = doc.add_paragraph(to_text)
+        anchor_para._p.addnext(new_para._p)  # type: ignore
+        last_anchor_map[anchor_key] = new_para
+        return new_para
+
+    sub_anchor, hits = find_nth_subsection_anchor(doc, sec_start, sec_end, subsection_candidates, occurrence)
+    if sub_anchor is None:
+        seen = [doc.paragraphs[i].text.strip() for i in hits]
+        die(
+            "ADD failed: subsection anchor not found or occurrence out of range.\n"
+            f"  SECTION: {section} (bounds paragraphs {sec_start}-{sec_end-1})\n"
+            f"  SUBSECTION: {subsection_key}\n"
+            f"  OCCURRENCE: {occurrence}\n"
+            f"  MATCHED_OCCURRENCES: {len(hits)}\n"
+            f"  MATCHED_LABELS: {seen[:10]}"
+        )
 
     new_para = doc.add_paragraph(to_text)
-    anchor_para._p.addnext(new_para._p)  # type: ignore
+    sub_anchor._p.addnext(new_para._p)  # type: ignore
+    last_anchor_map[anchor_key] = new_para
     return new_para
 
-    # canonical section -> candidate headings in DOCX
-    candidates = fam_map.get(section, [section])
+def apply_replace_section(doc: Document, canonical_section: str, to_text: str, family: str, rootp: Path) -> None:
+    fam_map, major, _subs = resolve_family_maps(family, rootp)
+    candidates = fam_map.get(canonical_section, [canonical_section])
+    if not major:
+        die(f"REPLACE_SECTION failed: __MAJOR_HEADINGS__ missing for family '{family}'")
 
-    idx = find_heading_paragraph_index(doc, candidates)
-    if idx < 0:
+    start_idx, end_idx = section_bounds(doc, candidates, major)
+    if start_idx < 0:
         heads = list_heading_candidates(doc)
         die(
-            "ADD failed: section heading not found.\n"
-            f"  SECTION: {section}\n"
+            "REPLACE_SECTION failed: section heading not found.\n"
+            f"  SECTION: {canonical_section}\n"
             f"  CANDIDATES: {candidates}\n"
             "  DOCX headings seen (sample):\n    - " + "\n    - ".join(heads[:30])
         )
 
-    # Insert paragraph right after the matched heading
-    p = doc.paragraphs[idx]
-    new_para = doc.add_paragraph(to_text)
-    p._p.addnext(new_para._p)  # type: ignore
+    i = start_idx + 1
+    while i < end_idx and i < len(doc.paragraphs):
+        delete_paragraph(doc, doc.paragraphs[i])
+        end_idx -= 1
 
-def apply_replace(doc: Document, from_text: str, to_text: str) -> None:
-    """
-    Replace exact paragraph text match (stripped) with to_text.
-    Hard fail if not found exactly once.
-    """
+    heading_para = doc.paragraphs[start_idx]
+    new_para = doc.add_paragraph(to_text)
+    heading_para._p.addnext(new_para._p)  # type: ignore
+
+def apply_replace_exact(doc: Document, from_text: str, to_text: str) -> None:
     target = from_text.strip()
     matches = [p for p in doc.paragraphs if p.text.strip() == target]
     if len(matches) == 0:
@@ -153,8 +220,7 @@ def apply_delete(doc: Document, from_text: str) -> None:
         die(f"DELETE failed: FROM text not found exactly: {from_text}")
     if len(matches) > 1:
         die(f"DELETE failed: FROM text matched multiple paragraphs ({len(matches)}). Must be unique.")
-    p = matches[0]._p  # type: ignore
-    p.getparent().remove(p)  # type: ignore
+    delete_paragraph(doc, matches[0])
 
 def main() -> None:
     ap = argparse.ArgumentParser(prog="rf_apply_changes_docx")
@@ -182,7 +248,6 @@ def main() -> None:
 
     sel = read_json(sel_json)
     approvals = read_json(appr_json)
-
     approved_nums = approvals.get("approved_change_numbers", [])
     if approved_nums is None or not isinstance(approved_nums, list):
         die("approvals.json missing approved_change_numbers list")
@@ -193,7 +258,6 @@ def main() -> None:
         die(f"Missing resume-master.docx: {master_docx}")
 
     proposals = parse_proposals(read_text(prop_md))
-
     missing = [n for n in approved_nums if n not in proposals]
     if missing:
         die(f"Approvals reference missing proposal numbers: {missing}")
@@ -208,11 +272,10 @@ def main() -> None:
         die(f"Refusing to overwrite existing output: {out_docx} (use --force)")
 
     shutil.copy2(master_docx, out_docx)
-
     doc = Document(str(out_docx))
 
     applied = []
-    last_added_anchor = {}
+    last_anchor_map = {}
 
     for n in approved_nums:
         p = proposals[n]
@@ -220,27 +283,42 @@ def main() -> None:
         section = (p.get("section") or "").strip()
         from_text = (p.get("from") or "").strip()
         to_text = (p.get("to") or "").strip()
+        subsection = (p.get("subsection") or "").strip() if p.get("subsection") else ""
+        occ = p.get("subsection_occurrence")
 
         if ch == "ADD":
             if not section or not to_text:
                 die(f"ADD proposal {n} missing SECTION or TO")
-            anchor = last_added_anchor.get(section)
-            newp = apply_add(doc, section, to_text, resolved.family, rootp, anchor_para=anchor)
-            last_added_anchor[section] = newp
+            if subsection:
+                if occ is None:
+                    die(f"ADD proposal {n} has SUBSECTION but missing SUBSECTION_OCCURRENCE")
+                apply_add_subsection(doc, section, subsection, int(occ), to_text, resolved.family, rootp, last_anchor_map)
+            else:
+                die("ADD without SUBSECTION is not supported in this build of Part B (use subsection anchors).")
+
+        elif ch == "REPLACE_SECTION":
+            if not section or not to_text:
+                die(f"REPLACE_SECTION proposal {n} missing SECTION or TO")
+            apply_replace_section(doc, section, to_text, resolved.family, rootp)
+
         elif ch == "REPLACE":
             if not from_text or not to_text:
                 die(f"REPLACE proposal {n} missing FROM or TO")
-            apply_replace(doc, from_text, to_text)
+            apply_replace_exact(doc, from_text, to_text)
+
         elif ch == "DELETE":
             if not from_text:
                 die(f"DELETE proposal {n} missing FROM")
             apply_delete(doc, from_text)
+
         else:
             die(f"Unknown CHANGE type in proposal {n}: {ch}")
 
         applied.append({
             "num": n,
             "section": section,
+            "subsection": subsection if subsection else None,
+            "subsection_occurrence": occ if subsection else None,
             "change": ch,
             "from": from_text if from_text else None,
             "to": to_text if to_text else None,

@@ -1,0 +1,46 @@
+{
+  "schema": "rf_section_aliases_v1",
+  "families": {
+    "qa_automation_engineer": {
+      "SUMMARY": [
+        "PROFESSIONAL SUMMARY:",
+        "SUMMARY:",
+        "PROFESSIONAL SUMMARY"
+      ],
+      "CORE COMPETENCIES": [
+        "TECHNICAL SKILL:",
+        "TECHNICAL SKILLS:",
+        "SKILLS:",
+        "TECHNICAL SKILL"
+      ],
+      "TOOLS": [
+        "TECHNICAL SKILL:",
+        "TECHNICAL SKILLS:",
+        "TOOLS:",
+        "SKILLS:"
+      ],
+      "PROJECT EXPERIENCE": [
+        "PROFESSIONAL EXPERIENCE:",
+        "PROJECT EXPERIENCE:",
+        "PROJECTS:",
+        "EXPERIENCE:"
+      ],
+      "PROFESSIONAL EXPERIENCE": [
+        "PROFESSIONAL EXPERIENCE:",
+        "EXPERIENCE:"
+      ],
+      "__MAJOR_HEADINGS__": [
+        "PROFESSIONAL SUMMARY:",
+        "TECHNICAL SKILL:",
+        "EDUCATION:",
+        "PROFESSIONAL EXPERIENCE:"
+      ],
+      "__SUBSECTIONS__": {
+        "ROLES_AND_RESPONSIBILITIES": [
+          "Roles and Responsibilities:",
+          "ROLES AND RESPONSIBILITIES:"
+        ]
+      }
+    }
+  }
+}

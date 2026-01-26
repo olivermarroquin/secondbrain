@@ -95,6 +95,8 @@ def main() -> None:
     if "etl" in active_tags:
         proposals.append({
             "section": "PROJECT EXPERIENCE",
+            "subsection": "ROLES_AND_RESPONSIBILITIES",
+            "subsection_occurrence": 1,
             "change": "ADD",
             "from": "",
             "to": "[PROPOSED: add data pipeline/ETL validation emphasis: batch jobs, data integrity checks, warehouse validation]"
@@ -111,6 +113,8 @@ def main() -> None:
     if "ai_ml" in active_tags:
         proposals.append({
             "section": "PROJECT EXPERIENCE",
+            "subsection": "ROLES_AND_RESPONSIBILITIES",
+            "subsection_occurrence": 1,
             "change": "ADD",
             "from": "",
             "to": "[PROPOSED: add AI/ML testing emphasis: model output validation, data quality checks, monitoring/alerting for drift (if applicable)]"
@@ -131,6 +135,10 @@ def main() -> None:
         lines.append(f"{n})")
         lines.append(f"SECTION: {p['section']}")
         lines.append(f"CHANGE: {p['change']}")
+        if p.get("subsection"):
+            lines.append(f"SUBSECTION: {p['subsection']}")
+        if p.get("subsection_occurrence") is not None:
+            lines.append(f"SUBSECTION_OCCURRENCE: {p['subsection_occurrence']}")
         if p["change"] in ("REPLACE", "DELETE"):
             lines.append(f"FROM: {p['from']}")
         if p["change"] in ("REPLACE", "REPLACE_SECTION", "ADD"):
