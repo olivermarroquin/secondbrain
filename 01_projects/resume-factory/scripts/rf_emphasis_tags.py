@@ -28,41 +28,80 @@ def read_json(p: Path):
 def norm(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
 
-def count_hits(text: str, keywords: list[str]) -> dict[str, int]:
+def count_hits_phrase(text: str, phrases: list[str]) -> dict[str, int]:
+    """
+    Non-overlapping substring match (normalized).
+    Good for multi-word phrases and longer keywords.
+    """
     t = norm(text)
     hits: dict[str, int] = {}
-    for kw in keywords:
-        k = norm(kw)
+    for ph in phrases:
+        k = norm(ph)
         if not k:
             continue
-        hits[kw] = len(re.findall(re.escape(k), t))
+        hits[ph] = len(re.findall(re.escape(k), t))
     return hits
 
-# Locked categories (extend keyword lists carefully; keep stable)
-TAGS: dict[str, list[str]] = {
-    "api": [
-        "api", "rest", "restful", "graphql", "postman", "rest assured", "soap",
-        "http", "endpoint", "swagger", "openapi"
-    ],
-    "perf": [
-        "performance", "load testing", "stress testing", "jmeter", "gatling",
-        "k6", "latency", "throughput"
-    ],
-    "cloud": [
-        "aws", "azure", "gcp", "cloud", "kubernetes", "docker", "ecs", "eks",
-        "lambda", "terraform", "helm"
-    ],
-    "etl": [
-        "etl", "data pipeline", "data pipelines", "data warehouse", "warehouse",
-        "spark", "airflow", "dbt", "snowflake", "redshift", "bigquery"
-    ],
-    "mobile": [
-        "mobile", "android", "ios", "appium", "xcode", "espresso", "xcuitest"
-    ],
-    "ai_ml": [
-        "machine learning", "ml", "ai", "model", "llm", "genai", "prompt",
-        "computer vision", "nlp"
-    ],
+def count_hits_token(text: str, tokens: list[str]) -> dict[str, int]:
+    """
+    Whole-word token match using word boundaries.
+    Prevents 'ai' matching inside 'containerized'.
+    """
+    t = text.lower()
+    hits: dict[str, int] = {}
+    for tok in tokens:
+        k = tok.strip().lower()
+        if not k:
+            continue
+        # word boundary match; escape token
+        pattern = r"\b" + re.escape(k) + r"\b"
+        hits[tok] = len(re.findall(pattern, t))
+    return hits
+
+# Locked categories.
+# Split into phrase keywords vs token keywords to prevent false positives.
+TAGS: dict[str, dict[str, list[str]]] = {
+    "api": {
+        "phrases": [
+            "api", "rest", "restful", "graphql", "postman", "rest assured", "soap",
+            "http", "endpoint", "swagger", "openapi"
+        ],
+        "tokens": []
+    },
+    "perf": {
+        "phrases": [
+            "performance", "load testing", "stress testing", "jmeter", "gatling",
+            "k6", "latency", "throughput"
+        ],
+        "tokens": []
+    },
+    "cloud": {
+        "phrases": [
+            "aws", "azure", "gcp", "cloud", "kubernetes", "docker", "container",
+            "containerized", "ecs", "eks", "lambda", "terraform", "helm"
+        ],
+        "tokens": []
+    },
+    "etl": {
+        "phrases": [
+            "etl", "data pipeline", "data pipelines", "data warehouse", "warehouse",
+            "spark", "airflow", "dbt", "snowflake", "redshift", "bigquery"
+        ],
+        "tokens": []
+    },
+    "mobile": {
+        "phrases": [
+            "mobile", "android", "ios", "appium", "xcode", "espresso", "xcuitest"
+        ],
+        "tokens": []
+    },
+    "ai_ml": {
+        "phrases": [
+            "machine learning", "artificial intelligence", "computer vision", "nlp", "genai"
+        ],
+        # ONLY count these as whole tokens
+        "tokens": ["ai", "ml", "llm"]
+    }
 }
 
 def main() -> None:
@@ -88,15 +127,21 @@ def main() -> None:
         die("job.json missing jd_raw")
 
     tag_results = {}
-    for tag, kws in TAGS.items():
-        hits = count_hits(jd_text, kws)
-        present = {k: v for k, v in hits.items() if v}
+    for tag, spec in TAGS.items():
+        ph = spec.get("phrases", []) or []
+        tok = spec.get("tokens", []) or []
+
+        ph_hits = count_hits_phrase(jd_text, ph) if ph else {}
+        tok_hits = count_hits_token(jd_text, tok) if tok else {}
+
+        # only keep non-zero hits
+        present = {k: v for k, v in {**ph_hits, **tok_hits}.items() if v}
+
         tag_results[tag] = {
             "hit_count": sum(present.values()),
             "hits": present,
         }
 
-    # sorted tags by hit_count desc, then name
     ordered = sorted(tag_results.items(), key=lambda kv: (kv[1]["hit_count"], kv[0]), reverse=True)
     active = [name for name, meta in ordered if meta["hit_count"] > 0]
 
