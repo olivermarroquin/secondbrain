@@ -40,7 +40,12 @@ else
 fi
 
 resume apply-approvals --app "$APP" --approve "$APPROVE_FINAL" --force >/dev/null
-resume materialize-stub --app "$APP" --force >/dev/null
+MAT="${MATERIALIZER:-stub}"
+if [[ "$MAT" == "ai" ]]; then
+  resume materialize-approved-ai --app "$APP" --force >/dev/null
+else
+  resume materialize-stub --app "$APP" --force >/dev/null
+fi
 resume build-docx --app "$APP" --force >/dev/null
 
 echo "SMOKE OK: $APP"

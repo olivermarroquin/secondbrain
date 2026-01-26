@@ -10,6 +10,7 @@ Usage:
   resume propose-changes --app <APP> [--force] [--root <ROOT>]
   resume apply-approvals --app <APP> --approve "1,3" [--force] [--root <ROOT>]
   resume materialize-stub --app <APP> [--force] [--root <ROOT>]
+  resume materialize-approved-ai --app <APP> [--force] [--root <ROOT>]
   resume build-docx --app <APP> [--force] [--root <ROOT>]
   resume export-pdf --app <APP> [--force] [--root <ROOT>]
   resume family-init --family <family> [--from-family <family>] [--force] [--root <ROOT>]
@@ -35,6 +36,7 @@ case "$cmd" in
   propose-changes)  exec "${RF_SCRIPTS}/rf_propose_changes.py" "$@";;
   apply-approvals)  exec "${RF_SCRIPTS}/rf_record_approvals.py" "$@";;
   materialize-stub) exec "${RF_SCRIPTS}/rf_materialize_stub.py" "$@";;
+  materialize-approved-ai) exec "${RF_SCRIPTS}/rf_materialize_approved_ai.py" "$@";;
   build-docx)       exec "${DOCGEN_PY}" "${RF_SCRIPTS}/rf_apply_changes_docx.py" "$@";;
   export-pdf)      exec "${RF_SCRIPTS}/rf_export_pdf.py" "$@";;
   family-init)      exec "${RF_SCRIPTS}/rf_family_init.py" "$@";;
