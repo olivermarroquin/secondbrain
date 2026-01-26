@@ -8,6 +8,7 @@ Usage:
   resume select-template --app <APP> [--write] [--root <ROOT>]
   resume emphasis-tags --app <APP> [--write] [--root <ROOT>]
   resume propose-changes --app <APP> [--force] [--root <ROOT>]
+  resume propose-changes-ai --app <APP> [--rr-occurrence N] [--force] [--root <ROOT>]
   resume apply-approvals --app <APP> --approve "1,3" [--force] [--root <ROOT>]
   resume materialize-stub --app <APP> [--force] [--root <ROOT>]
   resume materialize-approved-ai --app <APP> [--force] [--root <ROOT>]
@@ -34,6 +35,7 @@ case "$cmd" in
   select-template)  exec "${RF_SCRIPTS}/rf_select_template.py" "$@";;
   emphasis-tags)    exec "${RF_SCRIPTS}/rf_emphasis_tags.py" "$@";;
   propose-changes)  exec "${RF_SCRIPTS}/rf_propose_changes.py" "$@";;
+  propose-changes-ai) exec "${RF_SCRIPTS}/rf_propose_changes_ai.py" "$@";;
   apply-approvals)  exec "${RF_SCRIPTS}/rf_record_approvals.py" "$@";;
   materialize-stub) exec "${RF_SCRIPTS}/rf_materialize_stub.py" "$@";;
   materialize-approved-ai) exec "${RF_SCRIPTS}/rf_materialize_approved_ai.py" "$@";;
