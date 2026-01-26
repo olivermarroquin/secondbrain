@@ -13,8 +13,33 @@ resume emphasis-tags --app "$APP" --write >/dev/null
 RR="${RR_OCCURRENCE:-1}"
 resume propose-changes --app "$APP" --rr-occurrence "$RR" --force >/dev/null
 
-# approve a mix: section ADDs + subsection ADD (adjust numbers if your proposer changes later)
-resume apply-approvals --app "$APP" --approve "2,3,4,5" --force >/dev/null
+# approvals: default approve SAFE proposals (ADD + REPLACE_SECTION); optionally set APPROVE="1,3"
+APPROVE_LIST="${APPROVE:-}"
+PROP="$APP/resume_refs/resume_pipeline/proposed-changes.md"
+
+# collect proposal numbers that exist and are safe
+SAFE_NUMS=$(awk '
+  /^[0-9]+\)$/ {gsub("\)", "", $1); n=$1}
+  /^CHANGE: / {ch=$2}
+  /^$/ { if (n != "" && (ch=="ADD" || ch=="REPLACE_SECTION")) print n; n=""; ch=""; }
+' "$PROP" | paste -sd, -)
+
+if [[ -n "$APPROVE_LIST" ]]; then
+  # filter requested approvals to those that exist
+  EXISTING=$(awk '/^[0-9]+\)$/ {gsub("\)", "", $1); print $1}' "$PROP" | sort -n | paste -sd, -)
+  # simple filter: keep only numbers present in EXISTING
+  FILTERED=""
+  IFS=, read -r -a req <<<"$APPROVE_LIST"
+  for x in "${req[@]}"; do
+    [[ ",$EXISTING," == *",$x,"* ]] && FILTERED+="${FILTERED:+,}$x"
+  done
+  [[ -z "$FILTERED" ]] && { echo "ERROR: none of APPROVE are in proposals. Existing: [$EXISTING]" >&2; exit 2; }
+  resume apply-approvals --app "$APP" --approve "$FILTERED" --force >/dev/null
+else
+  [[ -z "$SAFE_NUMS" ]] && { echo "ERROR: no safe proposals found to approve" >&2; exit 2; }
+  resume apply-approvals --app "$APP" --approve "$SAFE_NUMS" --force >/dev/null
+fi
+
 resume build-docx --app "$APP" --force >/dev/null
 
 echo "SMOKE OK: $APP"
