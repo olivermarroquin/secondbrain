@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -21,11 +20,61 @@ LIB = Path("~/secondbrain/01_projects/resume-factory/lib").expanduser()
 sys.path.insert(0, str(LIB))
 from rf_paths import resolve_app, RFPathError  # type: ignore
 
-
 def die(msg: str, code: int = 2) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(code)
 
+
+def _load_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        die(f"Missing required file: {path}")
+    except json.JSONDecodeError as e:
+        die(f"Invalid JSON: {path} ({e})")
+
+def _require_patches_if_approved(app: Path) -> tuple[list[int] | None, dict | None]:
+    """
+    If approvals.json exists, patches.json must exist.
+    Returns (approved_numbers, patches_json) or (None, None) if no approvals.json.
+    """
+    pipe = app / "resume_refs" / "resume_pipeline"
+    approvals_path = pipe / "approvals.json"
+    patches_path = pipe / "patches.json"
+
+    if not approvals_path.exists():
+        return None, None
+
+    approvals = _load_json(approvals_path)
+    approved = approvals.get("approved_change_numbers", [])
+    if not isinstance(approved, list) or not all(isinstance(x, int) for x in approved):
+        die(f"Invalid approvals.json approved_change_numbers: {approvals_path}")
+
+    if not patches_path.exists():
+        die(f"Missing patches.json for approved build: {patches_path}\nRun: resume materialize-approved-ai --app \"{app}\"")
+
+    patches = _load_json(patches_path)
+    if patches.get("schema") != "rf_patches_v1":
+        die(f"Unsupported patches schema (expected rf_patches_v1): {patches_path}")
+
+    pnums = patches.get("approved_change_numbers", [])
+    if pnums != approved:
+        die(f"patches.json approved_change_numbers does not match approvals.json\npatches: {pnums}\napprovals: {approved}")
+
+    # hard ban placeholders
+    def _contains_placeholder(obj) -> bool:
+        if isinstance(obj, str):
+            return "[PROPOSED:" in obj or "[PLACEHOLDER:" in obj
+        if isinstance(obj, list):
+            return any(_contains_placeholder(x) for x in obj)
+        if isinstance(obj, dict):
+            return any(_contains_placeholder(v) for v in obj.values())
+        return False
+
+    if _contains_placeholder(patches):
+        die(f"patches.json contains placeholder text ([PROPOSED:...] or [PLACEHOLDER:...]): {patches_path}")
+
+    return approved, patches
 
 def read_text(p: Path) -> str:
     return p.read_text(encoding="utf-8", errors="replace")

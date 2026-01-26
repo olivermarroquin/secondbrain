@@ -27,19 +27,20 @@ SAFE_NUMS=$(awk '
 if [[ -n "$APPROVE_LIST" ]]; then
   # filter requested approvals to those that exist
   EXISTING=$(awk '/^[0-9]+\)$/ {gsub("\)", "", $1); print $1}' "$PROP" | sort -n | paste -sd, -)
-  # simple filter: keep only numbers present in EXISTING
   FILTERED=""
   IFS=, read -r -a req <<<"$APPROVE_LIST"
   for x in "${req[@]}"; do
     [[ ",$EXISTING," == *",$x,"* ]] && FILTERED+="${FILTERED:+,}$x"
   done
   [[ -z "$FILTERED" ]] && { echo "ERROR: none of APPROVE are in proposals. Existing: [$EXISTING]" >&2; exit 2; }
-  resume apply-approvals --app "$APP" --approve "$FILTERED" --force >/dev/null
+  APPROVE_FINAL="$FILTERED"
 else
   [[ -z "$SAFE_NUMS" ]] && { echo "ERROR: no safe proposals found to approve" >&2; exit 2; }
-  resume apply-approvals --app "$APP" --approve "$SAFE_NUMS" --force >/dev/null
+  APPROVE_FINAL="$SAFE_NUMS"
 fi
 
+resume apply-approvals --app "$APP" --approve "$APPROVE_FINAL" --force >/dev/null
+resume materialize-stub --app "$APP" --force >/dev/null
 resume build-docx --app "$APP" --force >/dev/null
 
 echo "SMOKE OK: $APP"
