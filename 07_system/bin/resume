@@ -6,7 +6,7 @@ usage() {
 Usage:
   resume load-job --app <APP> [--write-debug] [--root <ROOT>]
   resume select-template --app <APP> [--write] [--root <ROOT>]
-
+  resume emphasis-tags --app <APP> [--write] [--root <ROOT>]
 EOF
 }
 
@@ -20,16 +20,9 @@ ROOT="${HOME}/secondbrain"
 RF_SCRIPTS="${ROOT}/01_projects/resume-factory/scripts"
 
 case "$cmd" in
-  load-job)
-    exec "${RF_SCRIPTS}/rf_load_job.py" "$@"
-    ;;
-  select-template)
-    exec "${RF_SCRIPTS}/rf_select_template.py" "$@"
-    ;;
-  -h|--help|help)
-    usage
-    ;;
-  *)
-    die "Unknown command: $cmd"
-    ;;
+  load-job)         exec "${RF_SCRIPTS}/rf_load_job.py" "$@";;
+  select-template)  exec "${RF_SCRIPTS}/rf_select_template.py" "$@";;
+  emphasis-tags)    exec "${RF_SCRIPTS}/rf_emphasis_tags.py" "$@";;
+  -h|--help|help)   usage;;
+  *) die "Unknown command: $cmd";;
 esac
