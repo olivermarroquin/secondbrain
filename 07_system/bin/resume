@@ -5,8 +5,8 @@ usage() {
   cat <<'EOF'
 Usage:
   resume load-job --app <APP> [--write-debug] [--root <ROOT>]
+  resume select-template --app <APP> [--write] [--root <ROOT>]
 
-(Commands will be added incrementally)
 EOF
 }
 
@@ -22,6 +22,9 @@ RF_SCRIPTS="${ROOT}/01_projects/resume-factory/scripts"
 case "$cmd" in
   load-job)
     exec "${RF_SCRIPTS}/rf_load_job.py" "$@"
+    ;;
+  select-template)
+    exec "${RF_SCRIPTS}/rf_select_template.py" "$@"
     ;;
   -h|--help|help)
     usage
