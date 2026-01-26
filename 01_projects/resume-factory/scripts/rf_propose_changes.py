@@ -26,6 +26,7 @@ def read_json(p: Path):
 
 def main() -> None:
     ap = argparse.ArgumentParser(prog="rf_propose_changes")
+    ap.add_argument("--rr-occurrence", type=int, default=1, help="1-indexed Roles and Responsibilities occurrence for subsection-anchored inserts (default: 1)")
     ap.add_argument("--app", required=True, help="Job folder path (APP)")
     ap.add_argument("--root", default="~/secondbrain", help="Secondbrain root (default: ~/secondbrain)")
     ap.add_argument("--force", action="store_true", help="Overwrite proposed-changes.md if it exists")
@@ -96,7 +97,7 @@ def main() -> None:
         proposals.append({
             "section": "PROJECT EXPERIENCE",
             "subsection": "ROLES_AND_RESPONSIBILITIES",
-            "subsection_occurrence": 1,
+            "subsection_occurrence": args.rr_occurrence,
             "change": "ADD",
             "from": "",
             "to": "[PROPOSED: add data pipeline/ETL validation emphasis: batch jobs, data integrity checks, warehouse validation]"
@@ -114,7 +115,7 @@ def main() -> None:
         proposals.append({
             "section": "PROJECT EXPERIENCE",
             "subsection": "ROLES_AND_RESPONSIBILITIES",
-            "subsection_occurrence": 1,
+            "subsection_occurrence": args.rr_occurrence,
             "change": "ADD",
             "from": "",
             "to": "[PROPOSED: add AI/ML testing emphasis: model output validation, data quality checks, monitoring/alerting for drift (if applicable)]"
