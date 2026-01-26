@@ -1,0 +1,22 @@
+{
+  "schema": "rf_approvals_v1",
+  "approved_at_utc": "2026-01-26T03:41:52.631716+00:00",
+  "app": {
+    "app_path": "/Users/olivermarroquin/secondbrain/01_projects/jobs/qa_automation_engineer/plum_gravity/2026-01-23_cypress-qa-automation-engineer",
+    "family": "qa_automation_engineer",
+    "company": "plum_gravity",
+    "role_slug": "2026-01-23_cypress-qa-automation-engineer"
+  },
+  "proposals_path": "/Users/olivermarroquin/secondbrain/01_projects/jobs/qa_automation_engineer/plum_gravity/2026-01-23_cypress-qa-automation-engineer/resume_refs/resume_pipeline/proposed-changes.md",
+  "existing_change_numbers": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "approved_change_numbers": [
+    2,
+    3
+  ],
+  "approved_count": 2
+}
