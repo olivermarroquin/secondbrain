@@ -64,12 +64,10 @@ def main() -> None:
     # Always include a “stack alignment” proposal based on selected template.
     proposals.append({
         "section": "SUMMARY",
-        "change": "REPLACE",
-        "from": "[PLACEHOLDER: existing summary line about primary stack]",
-        "to": f"[PROPOSED: align summary to template stack: {selected_slug}]"
-    })
-
-    # Tag-driven proposals
+        "change": "REPLACE_SECTION",
+        "to": f"[PROPOSED: replace SUMMARY section body to align with template stack: {selected_slug}]"
+      })
+# Tag-driven proposals
     if "api" in active_tags:
         proposals.append({
             "section": "CORE COMPETENCIES",
@@ -135,7 +133,7 @@ def main() -> None:
         lines.append(f"CHANGE: {p['change']}")
         if p["change"] in ("REPLACE", "DELETE"):
             lines.append(f"FROM: {p['from']}")
-        if p["change"] in ("REPLACE", "ADD"):
+        if p["change"] in ("REPLACE", "REPLACE_SECTION", "ADD"):
             lines.append(f"TO: {p['to']}")
         lines.append("")
         n += 1
