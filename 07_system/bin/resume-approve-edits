@@ -1,0 +1,366 @@
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
+import argparse, json, os, re, subprocess, sys
+from pathlib import Path
+
+# --- Helpers ---------------------------------------------------------------
+
+def die(msg: str, code: int = 1):
+    print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+def norm(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip()).lower()
+
+def load_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except Exception as e:
+        die(f"Failed to read JSON: {path} ({e})")
+
+def ensure_docx():
+    try:
+        import docx  # noqa: F401
+    except Exception as e:
+        die(f"python-docx not available in this interpreter ({e}). "
+            f"Expected docgen venv python at: {sys.executable}")
+
+def read_job_meta(app: Path) -> dict:
+    jm = app / "tracking" / "job-meta.json"
+    if not jm.exists():
+        die(f"Missing job-meta.json: {jm}")
+    return load_json(jm)
+
+def read_template_from_select(app: Path):
+    """
+    Uses the same signals-driven selection that resume-select uses by shelling out to resume-select,
+    then parsing the 'Best pick' block. This keeps behavior consistent without duplicating logic here.
+    """
+    r = subprocess.run(
+        ["resume-select", "--app", str(app)],
+        capture_output=True, text=True
+    )
+    if r.returncode != 0:
+        die(f"resume-select failed:\n{r.stderr}\n{r.stdout}")
+
+    tid = slug = tpath = None
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("- template_id:"):
+            tid = line.split(":", 1)[1].strip()
+        elif line.startswith("- template_slug:"):
+            slug = line.split(":", 1)[1].strip()
+        elif line.startswith("- template_path:"):
+            tpath = line.split(":", 1)[1].strip()
+
+    if not (tid and slug and tpath):
+        die("Could not parse template from resume-select output. "
+            "Expected Best pick block with template_id/template_slug/template_path.")
+
+    tdir = Path(tpath)
+    master = tdir / "resume-master.docx"
+    if not master.exists():
+        die(f"Missing template resume-master.docx: {master}")
+
+    return tid, slug, tdir, master
+
+def parse_proposals(p: Path):
+    d = load_json(p)
+    if isinstance(d, dict) and "proposals" in d and isinstance(d["proposals"], list):
+        return d["proposals"]
+    if isinstance(d, list):
+        return d
+    die(f"Unexpected edit-proposals.json structure: {p}")
+
+def select_by_numbers(proposals, nums):
+    if not nums:
+        return proposals
+    out = []
+    for n in nums:
+        i = n - 1
+        if i < 0 or i >= len(proposals):
+            die(f"Invalid proposal number: {n} (have {len(proposals)})")
+        out.append(proposals[i])
+    return out
+
+def apply_replace_line(doc, before_line: str, after_line: str):
+    """
+    Preserve formatting:
+    - Prefer replacing inside an existing run if possible (keeps font/size).
+    - If we need to replace the whole paragraph, clear runs and recreate one run
+      using the first run's formatting as a template.
+    """
+    b_raw = (before_line or "").strip()
+    a_raw = (after_line or "").strip()
+    if not b_raw:
+        return False
+
+
+def apply_replace_phrase(doc, before_phrase: str, after_phrase: str):
+    """
+    Replace a phrase inside paragraphs while preserving run formatting.
+    Works even when the phrase spans runs by rebuilding paragraph text using first-run formatting.
+    """
+    b = (before_phrase or "")
+    a = (after_phrase or "")
+    if not b:
+        return False
+
+    for para in doc.paragraphs:
+        t = para.text or ""
+        if b in t:
+            # Prefer per-run replacement first
+            for r in para.runs:
+                if b in r.text:
+                    r.text = r.text.replace(b, a, 1)
+                    return True
+
+            # Phrase spans runs: rebuild paragraph, preserve first run formatting
+            tpl = para.runs[0] if para.runs else None
+            new_text = t.replace(b, a, 1)
+            for rr in list(para.runs):
+                rr.text = ""
+            r2 = para.add_run(new_text)
+            if tpl is not None and tpl.font is not None:
+                r2.bold = tpl.bold
+                r2.italic = tpl.italic
+                r2.underline = tpl.underline
+                r2.font.name = tpl.font.name
+                r2.font.size = tpl.font.size
+            return True
+
+    return False
+
+
+    b_n = norm(b_raw)
+
+    for para in doc.paragraphs:
+        t = para.text or ""
+        tn = norm(t)
+        if not tn:
+            continue
+
+        # Case 1: exact paragraph match -> replace whole paragraph, preserve formatting
+        if tn == b_n:
+            # capture formatting from first run if present
+            tpl = para.runs[0] if para.runs else None
+            for r in list(para.runs):
+                r.text = ""
+            r = para.add_run(a_raw)
+            if tpl is not None:
+                r.bold = tpl.bold
+                r.italic = tpl.italic
+                r.underline = tpl.underline
+                if tpl.font is not None:
+                    r.font.name = tpl.font.name
+                    r.font.size = tpl.font.size
+            return True
+
+        # Case 2: exact raw substring present -> try replacing inside a run (best)
+        if b_raw in t:
+            for r in para.runs:
+                if b_raw in r.text:
+                    r.text = r.text.replace(b_raw, a_raw, 1)
+                    return True
+            # fallback: replace whole paragraph if substring spans runs
+            tpl = para.runs[0] if para.runs else None
+            for rr in list(para.runs):
+                rr.text = ""
+            r2 = para.add_run(t.replace(b_raw, a_raw, 1))
+            if tpl is not None:
+                r2.bold = tpl.bold
+                r2.italic = tpl.italic
+                r2.underline = tpl.underline
+                if tpl.font is not None:
+                    r2.font.name = tpl.font.name
+                    r2.font.size = tpl.font.size
+            return True
+
+        # Case 3: normalized containment (danger) -> only replace whole paragraph if short
+        if b_n in tn and len(t) <= 200:
+            tpl = para.runs[0] if para.runs else None
+            for rr in list(para.runs):
+                rr.text = ""
+            r3 = para.add_run(a_raw)
+            if tpl is not None:
+                r3.bold = tpl.bold
+                r3.italic = tpl.italic
+                r3.underline = tpl.underline
+                if tpl.font is not None:
+                    r3.font.name = tpl.font.name
+                    r3.font.size = tpl.font.size
+            return True
+
+    return False
+
+
+    b_n = norm(b_raw)
+
+    for para in doc.paragraphs:
+        t = para.text or ""
+        tn = norm(t)
+        if not tn:
+            continue
+
+        # A) exact normalized equality
+        if tn == b_n:
+            para.text = a_raw
+            return True
+
+        # C) raw substring
+        if b_raw in t:
+            para.text = t.replace(b_raw, a_raw, 1)
+            return True
+
+        # B) normalized containment (fallback)
+        if b_n in tn:
+            # We can't reliably replace by normalized boundaries; safest is to replace whole paragraph
+            # ONLY if paragraph is short-ish (avoid nuking large blocks).
+            if len(t) <= 200:
+                para.text = a_raw
+                return True
+
+    return False
+
+# --- Main ------------------------------------------------------------------
+
+def main():
+    ensure_docx()
+    from docx import Document  # type: ignore
+
+    ap = argparse.ArgumentParser(
+        prog="resume-approve-edits",
+        description="Apply edit proposals to a selected resume template and write a single final resume (no locked/flex split)."
+    )
+    ap.add_argument("--app", required=True, help="Absolute path to application folder")
+    ap.add_argument("--numbers", nargs="*", type=int, default=[], help="Apply only these proposal numbers (1-based). Default: all.")
+    ap.add_argument("--dry-run", action="store_true", help="Validate + show what would apply, but do not write files.")
+    ap.add_argument("--force", action="store_true", help="Overwrite existing resume.docx if it exists.")
+    ap.add_argument("--allow-missing", action="store_true", help="Do not fail if a proposal cannot be applied.")
+    ap.add_argument("--open", action="store_true", help="Open the generated resume.docx after writing (macOS 'open').")
+
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser().resolve()
+    if not app.is_dir():
+        die(f"App dir missing: {app}")
+
+    # Required inputs
+    props_path = app / "resume_refs" / "edit-proposals.json"
+    if not props_path.exists():
+        die(f"Missing proposals file: {props_path}")
+
+    # Determine template via resume-select
+    tid, slug, tdir, master = read_template_from_select(app)
+
+    # Load proposals
+    proposals = parse_proposals(props_path)
+    chosen = select_by_numbers(proposals, args.numbers)
+
+    if not chosen:
+        die("No proposals to apply.")
+
+    # Load template docx
+    doc = Document(str(master))
+
+    print(f"APP: {app}")
+    jm = read_job_meta(app)
+    print(f"JOB: {jm.get('company','?')} | {jm.get('role_title','?')} | date_found={jm.get('date_found','?')} | status={jm.get('status','?')}")
+    print()
+    print("TEMPLATE:")
+    print(f"- template_id: {tid}")
+    print(f"- template_slug: {slug}")
+    print(f"- template_path: {tdir}")
+    print(f"- resume-master.docx: {master}")
+    print()
+    print(f"Proposals selected: {len(chosen)} of {len(proposals)}")
+
+    applied = []
+    failed = []
+
+    for idx, pr in enumerate(chosen, start=1):
+        section = pr.get("section", "?")
+        op = pr.get("op", "?")
+        before = pr.get("before", [])
+        after = pr.get("after", [])
+        rationale = pr.get("rationale", "")
+
+        b = before[0] if isinstance(before, list) and before else ""
+        a = after[0] if isinstance(after, list) and after else ""
+
+        if op == "REPLACE_LINE":
+            ok = apply_replace_line(doc, b, a)
+        elif op == "REPLACE_PHRASE":
+            ok = apply_replace_phrase(doc, b, a)
+        else:
+            failed.append({"proposal": pr, "error": f"Unsupported op: {op}"})
+            continue
+        if ok:
+            applied.append({
+                "n": idx,
+                "section": section,
+                "op": op,
+                "before": b,
+                "after": a,
+                "rationale": rationale
+            })
+        else:
+            failed.append({"proposal": pr, "error": "Target line not found in DOCX paragraphs"})
+
+    print()
+    print(f"APPLIED: {len(applied)}")
+    for x in applied:
+        print(f"- {x['n']}. [{x['section']}] {x['op']}")
+
+    print()
+    print(f"FAILED: {len(failed)}")
+    for f in failed[:10]:
+        pr = f.get("proposal", {})
+        print(f"- [{pr.get('section','?')}] {pr.get('op','?')}: {f.get('error','?')}")
+    if len(failed) > 10:
+        print(f"  ... {len(failed)-10} more")
+
+    # Fail policy
+    if failed and not args.allow_missing:
+        if args.dry_run:
+            print("\nDRY RUN — nothing written.")
+        die("One or more proposals could not be applied. Fix proposals or re-run with --allow-missing.", 2)
+
+    out_dir = app / "resume_refs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_docx = out_dir / "resume.docx"
+    log_path = out_dir / "edits-applied.json"
+
+    if args.dry_run:
+        print("\nDRY RUN — nothing written.")
+        return
+
+    if out_docx.exists() and not args.force:
+        die(f"Refusing to overwrite existing file: {out_docx} (use --force)")
+
+    # Write resume + log
+    doc.save(str(out_docx))
+    log = {
+        "app": str(app),
+        "template_id": tid,
+        "template_slug": slug,
+        "template_path": str(tdir),
+        "master_docx": str(master),
+        "output_docx": str(out_docx),
+        "applied_count": len(applied),
+        "failed_count": len(failed),
+        "applied": applied,
+        "failed": failed,
+    }
+    log_path.write_text(json.dumps(log, indent=2) + "\n")
+
+    print(f"\nWROTE: {out_docx}")
+    print(f"WROTE: {log_path}")
+
+    if args.open:
+        try:
+            subprocess.run(["open", str(out_docx)], check=False)
+        except Exception:
+            pass
+
+if __name__ == "__main__":
+    main()
