@@ -1,4 +1,4 @@
-#!/Users/olivermarroquin/secondbrain/07_system/venvs/resume/bin/python
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
 import argparse, json, re
 from pathlib import Path
 from datetime import datetime, timezone
