@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${ROOT:-$HOME/secondbrain}"
+PY="$ROOT/07_system/venvs/docgen/bin/python"
+SCRIPT="$ROOT/01_projects/resume-factory/scripts/rf_family_init.py"
+
+exec "$PY" "$SCRIPT" "$@"
