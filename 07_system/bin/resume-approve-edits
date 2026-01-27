@@ -289,6 +289,8 @@ def main():
 
         if op == "REPLACE_LINE":
             ok = apply_replace_line(doc, b, a)
+            if not ok:
+                ok = apply_replace_phrase(doc, b, a) # fallback
         elif op == "REPLACE_PHRASE":
             ok = apply_replace_phrase(doc, b, a)
         else:

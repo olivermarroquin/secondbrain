@@ -241,12 +241,11 @@ def make_proposals(jd_norm: str, template_id: str, summary: list[str], skills: l
                     after_line = after_line + ", Cypress (E2E)"
                 add(
                     "SKILLS",
-                    "REPLACE_LINE",
-                    before,
-                    [after_line],
-                    "JD contains cypress; add to Automation Frameworks for stack match."
-                )
-    # B) TypeScript/JavaScript emphasis: if JD hits and summary doesn't mention both
+                    "REPLACE_PHRASE",
+                    ["Playwright (TypeScript), Playwright Test, Selenium WebDriver, Rest Assured, Cucumber"],
+                    ["Playwright (TypeScript), Playwright Test, Selenium WebDriver, Rest Assured, Cucumber, Cypress (E2E)"],
+                    "JD contains cypress; add to frameworks list without changing the bold label run."
+                )# B) TypeScript/JavaScript emphasis: if JD hits and summary doesn't mention both
     if (has(jd_norm, 'typescript') or has(jd_norm, 'javascript')):
         need_ts = has(jd_norm, 'typescript') and not has(summary_norm, 'typescript')
         need_js = has(jd_norm, 'javascript') and not has(summary_norm, 'javascript')
@@ -260,14 +259,12 @@ def make_proposals(jd_norm: str, template_id: str, summary: list[str], skills: l
                 if need_js and 'javascript' not in after.lower():
                     after = after.rstrip('.') + ' using JavaScript.'
                 add(
-                    'SUMMARY',
-                    'REPLACE_LINE',
-                    before,
-                    [after],
-                    'JD stack includes TypeScript/JavaScript; reflect in Professional Summary content.'
-                )
-
-    # C) CI/CD mention:
+                    "SUMMARY",
+                    "REPLACE_PHRASE",
+                    ["automation testing for web, API, and mobile applications."],
+                    ["automation testing using JavaScript for web, API, and mobile applications."],
+                    "JD stack includes JavaScript; replace the existing summary clause (stable target in DOCX)."
+                )# C) CI/CD mention:
 
     if has(jd_norm, "ci/cd") and not has(summary_norm, "ci/cd") and not has(summary_norm, "cicd"):
         # find a summary line with "ci" tooling mention or add to 3rd line
@@ -277,7 +274,7 @@ def make_proposals(jd_norm: str, template_id: str, summary: list[str], skills: l
             after = summary[tgt].rstrip(".") + " with CI/CD pipeline validation."
             add(
                 "SUMMARY",
-                "REPLACE_LINE",
+                "REPLACE_PHRASE",
                 before,
                 [after],
                 "JD includes CI/CD; add explicit CI/CD mention in summary."
@@ -294,7 +291,7 @@ def make_proposals(jd_norm: str, template_id: str, summary: list[str], skills: l
                 after = after.rstrip(".") + " (API testing)."
             add(
                 "SKILLS",
-                "REPLACE_LINE",
+                "REPLACE_PHRASE",
                 before,
                 [after],
                 "JD includes API/REST; make API testing explicit in skills line that already references API tools."
