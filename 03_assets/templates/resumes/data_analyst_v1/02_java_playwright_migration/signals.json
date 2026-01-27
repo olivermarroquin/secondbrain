@@ -1,0 +1,39 @@
+{
+  "schema": "rf_signals_v2",
+  "template_id": "02",
+  "template_slug": "02_java_playwright_migration",
+  "family": "qa_automation_engineer",
+
+  "primary_stack": {
+    "language": "java",
+    "automation_tool": "playwright"
+  },
+
+  "preferred_keywords": [
+    "playwright",
+    "browser automation",
+    "test automation",
+    "java",
+    "migration",
+    "selenium to playwright",
+    "framework",
+    "ci/cd"
+  ],
+
+  "neutral_keywords": [
+    "api testing",
+    "rest assured",
+    "postman",
+    "testng",
+    "junit",
+    "sql",
+    "docker"
+  ],
+
+  "anti_signals": [
+    "selenium (only)",
+    "cypress (only)"
+  ],
+
+  "notes": "Pick when Playwright is required or modern UI automation + migration narrative is valuable."
+}

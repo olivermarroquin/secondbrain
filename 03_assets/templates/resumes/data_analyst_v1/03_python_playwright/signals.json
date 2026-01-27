@@ -1,0 +1,39 @@
+{
+  "schema": "rf_signals_v2",
+  "template_id": "03",
+  "template_slug": "03_python_playwright",
+  "family": "qa_automation_engineer",
+
+  "primary_stack": {
+    "language": "python",
+    "automation_tool": "playwright"
+  },
+
+  "preferred_keywords": [
+    "python",
+    "playwright",
+    "pytest",
+    "api testing",
+    "requests",
+    "allure",
+    "fixtures",
+    "ci/cd"
+  ],
+
+  "neutral_keywords": [
+    "selenium",
+    "postman",
+    "sql",
+    "docker",
+    "kubernetes",
+    "aws",
+    "azure"
+  ],
+
+  "anti_signals": [
+    "java (only)",
+    "typescript (only)"
+  ],
+
+  "notes": "Pick when Python + Pytest/Playwright stack is requested or implied."
+}
