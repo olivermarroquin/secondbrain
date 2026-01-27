@@ -13,6 +13,7 @@ class Proposal:
     before: List[str]
     after: List[str]
     rationale: str
+    id: int | None = None  # optional; CLI assigns deterministically
 
 def _die(msg: str) -> Tuple[bool, str]:
     return False, msg
@@ -28,6 +29,7 @@ def validate_proposals(proposals: Any) -> Tuple[bool, str]:
         - before: [str]  (non-empty strings)
         - after:  [str]  (non-empty strings)
         - rationale: str (non-empty)
+        - id: int (optional; assigned by CLI)
     """
     if not isinstance(proposals, list):
         return _die("proposals must be a list")
@@ -35,6 +37,10 @@ def validate_proposals(proposals: Any) -> Tuple[bool, str]:
     for i, p in enumerate(proposals, start=1):
         if not isinstance(p, dict):
             return _die(f"proposal #{i}: must be an object")
+
+        pid = p.get("id", None)
+        if pid is not None and not (isinstance(pid, int) and pid >= 1):
+            return _die(f"proposal #{i}: id must be an int >= 1 if present")
 
         section = p.get("section")
         op = p.get("op")
@@ -58,7 +64,6 @@ def validate_proposals(proposals: Any) -> Tuple[bool, str]:
         if op == "REPLACE_LINE":
             if len(before) != 1 or len(after) != 1:
                 return _die(f"proposal #{i}: REPLACE_LINE requires before/after length of 1")
-        # REPLACE_PHRASE can still be 1->1 (we keep it strict/simple)
         if op == "REPLACE_PHRASE":
             if len(before) != 1 or len(after) != 1:
                 return _die(f"proposal #{i}: REPLACE_PHRASE requires before/after length of 1")
@@ -69,6 +74,8 @@ def json_schema_for_structured_outputs() -> Dict[str, Any]:
     """
     JSON Schema used for OpenAI Structured Outputs.
     Keep this in sync with validate_proposals().
+
+    Note: id is NOT requested from the model; CLI assigns ids deterministically.
     """
     return {
         "name": "resume_edit_proposals",
