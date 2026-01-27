@@ -38,8 +38,8 @@ case "$cmd" in
   propose-changes-ai) exec "${RF_SCRIPTS}/rf_propose_changes_ai.py" "$@";;
   apply-approvals)  exec "${RF_SCRIPTS}/rf_record_approvals.py" "$@";;
   materialize-stub) exec "${RF_SCRIPTS}/rf_materialize_stub.py" "$@";;
-  materialize-approved-ai) exec "${RF_SCRIPTS}/rf_materialize_approved_ai.py" "$@";;
-  build-docx)       exec "${DOCGEN_PY}" "${RF_SCRIPTS}/rf_apply_changes_docx.py" "$@";;
+  materialize-approved-ai) exec "${DOCGEN_PY}" "${RF_SCRIPTS}/rf_materialize_approved_ai.py" "$@";;
+  build-docx)              exec "${DOCGEN_PY}" "${RF_SCRIPTS}/rf_apply_changes_docx.py" "$@";;  
   export-pdf)      exec "${RF_SCRIPTS}/rf_export_pdf.py" "$@";;
   family-init)      exec "${RF_SCRIPTS}/rf_family_init.py" "$@";;
   -h|--help|help)   usage;;

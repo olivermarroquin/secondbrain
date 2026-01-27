@@ -25,6 +25,67 @@ def die(msg: str, code: int = 2) -> None:
     sys.exit(code)
 
 
+def _patches_to_internal_proposals(patches):
+    '''
+    Convert rf_patches_v1 patches.json into internal proposal dicts used by build-docx.
+    Produces proposal dicts with keys: num, section, change, to, from, subsection, subsection_occurrence.
+    REPLACE_SECTION joins to_paragraphs with newlines into 'to'.
+    '''
+    items = patches.get("patches")
+    if not isinstance(items, list):
+        die("patches.json invalid: patches must be a list")
+
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            die("patches.json invalid: patch item must be an object")
+
+        num = it.get("num")
+        op  = it.get("op")
+        sec = it.get("section")
+
+        if not isinstance(num, int):
+            die(f"patches.json invalid: patch.num must be int (got {num})")
+        if op not in ("ADD", "REPLACE_SECTION", "DELETE"):
+            die(f"patches.json invalid: patch.op invalid: {op}")
+        if not isinstance(sec, str) or not sec.strip():
+            die(f"patches.json invalid: patch.section missing for num {num}")
+
+        pr = {"num": num, "section": sec, "change": op}
+
+        if "subsection" in it:
+            pr["subsection"] = it["subsection"]
+        if "subsection_occurrence" in it:
+            pr["subsection_occurrence"] = it["subsection_occurrence"]
+
+        if op == "ADD":
+            to_text = it.get("to_text")
+            if not isinstance(to_text, str) or not to_text.strip():
+                die(f"patches.json invalid: ADD missing to_text for num {num}")
+            pr["to"] = to_text.strip()
+
+        elif op == "REPLACE_SECTION":
+            paras = it.get("to_paragraphs")
+            to_text = it.get("to_text")
+            if isinstance(paras, list) and len(paras) > 0:
+                pr["to"] = "\n".join([str(x).strip() for x in paras if str(x).strip()])
+            elif isinstance(to_text, str) and to_text.strip():
+                pr["to"] = to_text.strip()
+            else:
+                die(f"patches.json invalid: REPLACE_SECTION missing to_paragraphs/to_text for num {num}")
+
+        elif op == "DELETE":
+            from_text = it.get("from_text")
+            if not isinstance(from_text, str) or not from_text.strip():
+                die(f"patches.json invalid: DELETE missing from_text for num {num}")
+            pr["from"] = from_text.strip()
+
+        out.append(pr)
+
+    return out
+
+
+
 def _load_json(path: Path) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -346,8 +407,16 @@ def main() -> None:
     master_docx = template_dir / "resume-master.docx"
     if not master_docx.exists():
         die(f"Missing resume-master.docx: {master_docx}")
+    approved, patches = _require_patches_if_approved(app)
 
-    proposals = parse_proposals(read_text(prop_md))
+    if approved is not None:
+        # Approved build MUST use patches.json (AI-materialized), not proposed-changes.md.
+        plist = _patches_to_internal_proposals(patches)
+        proposals = {int(x["num"]): x for x in plist}
+    else:
+        # No approvals.json => legacy/stub path uses proposed-changes.md
+        proposals = parse_proposals(read_text(prop_md))
+
     missing = [n for n in approved_nums if n not in proposals]
     if missing:
         die(f"Approvals reference missing proposal numbers: {missing}")
