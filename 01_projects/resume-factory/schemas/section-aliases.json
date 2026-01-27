@@ -9,11 +9,84 @@
         "PROFESSIONAL EXPERIENCE:"
       ],
       "__SUBSECTIONS__": {
-        "ROLES_AND_RESPONSIBILITIES": ["Roles and Responsibilities:"]
+        "ROLES_AND_RESPONSIBILITIES": [
+          "Roles and Responsibilities:"
+        ]
       },
-      "SUMMARY": ["PROFESSIONAL SUMMARY:", "SUMMARY:", "SUMMARY"],
-      "CORE COMPETENCIES": ["TECHNICAL SKILL:", "TECHNICAL SKILLS:", "SKILLS:", "CORE COMPETENCIES:"],
-      "PROJECT EXPERIENCE": ["PROFESSIONAL EXPERIENCE:", "EXPERIENCE:", "PROJECT EXPERIENCE:"]
+      "SUMMARY": [
+        "PROFESSIONAL SUMMARY:",
+        "SUMMARY:",
+        "SUMMARY"
+      ],
+      "CORE COMPETENCIES": [
+        "TECHNICAL SKILL:",
+        "TECHNICAL SKILLS:",
+        "SKILLS:",
+        "CORE COMPETENCIES:"
+      ],
+      "PROJECT EXPERIENCE": [
+        "PROFESSIONAL EXPERIENCE:",
+        "EXPERIENCE:",
+        "PROJECT EXPERIENCE:"
+      ]
+    },
+    "data_analyst": {
+      "__MAJOR_HEADINGS__": [
+        "SUMMARY:",
+        "SKILLS:",
+        "EXPERIENCE:",
+        "EDUCATION:"
+      ],
+      "__SUBSECTIONS__": {
+        "ROLES_AND_RESPONSIBILITIES": [
+          "Roles and Responsibilities:"
+        ]
+      },
+      "SUMMARY": [
+        "SUMMARY:",
+        "PROFESSIONAL SUMMARY:",
+        "SUMMARY"
+      ],
+      "CORE COMPETENCIES": [
+        "SKILLS:",
+        "TECHNICAL SKILL:",
+        "TECHNICAL SKILLS:",
+        "CORE COMPETENCIES:"
+      ],
+      "PROJECT EXPERIENCE": [
+        "EXPERIENCE:",
+        "PROFESSIONAL EXPERIENCE:",
+        "PROJECT EXPERIENCE:"
+      ]
+    },
+    "data_analyst_v1": {
+      "__MAJOR_HEADINGS__": [
+        "SUMMARY:",
+        "SKILLS:",
+        "EXPERIENCE:",
+        "EDUCATION:"
+      ],
+      "__SUBSECTIONS__": {
+        "ROLES_AND_RESPONSIBILITIES": [
+          "Roles and Responsibilities:"
+        ]
+      },
+      "SUMMARY": [
+        "SUMMARY:",
+        "PROFESSIONAL SUMMARY:",
+        "SUMMARY"
+      ],
+      "CORE COMPETENCIES": [
+        "SKILLS:",
+        "TECHNICAL SKILL:",
+        "TECHNICAL SKILLS:",
+        "CORE COMPETENCIES:"
+      ],
+      "PROJECT EXPERIENCE": [
+        "EXPERIENCE:",
+        "PROFESSIONAL EXPERIENCE:",
+        "PROJECT EXPERIENCE:"
+      ]
     }
   }
 }
