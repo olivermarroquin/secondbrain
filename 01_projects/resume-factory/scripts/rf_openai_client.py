@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
-
-from rf_proposal_schema import json_schema_for_structured_outputs
+from openai import RateLimitError, AuthenticationError
 
 def _env(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.environ.get(name)
@@ -26,94 +26,94 @@ def propose_edits_openai(
     max_proposals: int = 12,
     timeout_s: int = 60,
 ) -> List[Dict[str, Any]]:
-    """
-    Calls OpenAI and returns proposals list (already schema-constrained by Structured Outputs).
-    """
     _require("OPENAI_API_KEY")
 
     client = OpenAI(timeout=timeout_s)
-
     model = model or _env("RF_OPENAI_MODEL", "gpt-4o-mini")
 
-    sys = (
-        "You generate localized edit proposals for a resume.\n"
-        "Hard rules:\n"
-        "- Output MUST match the provided JSON schema exactly.\n"
-        "- AI proposes only. Do NOT apply edits.\n"
-        "- Proposals must be localized and safe.\n"
-        "- Use REPLACE_PHRASE unless a full-line replacement is truly required.\n"
-        "- The 'before' string MUST appear verbatim in the provided resume text blocks.\n"
-        "- Do not invent content that is not grounded in the JD.\n"
-        "- Do not add new sections; only adjust existing content.\n"
-        "- Prefer <= {max_proposals} proposals.\n"
-    ).format(max_proposals=max_proposals)
+    system_prompt = f"""
+You generate localized edit proposals for a resume.
 
-    # Keep the user prompt extremely explicit about "before must exist"
-    usr = (
-        "JOB DESCRIPTION (raw):\n"
-        "-----\n"
-        f"{jd_raw.strip()}\n"
-        "-----\n\n"
-        "TEMPLATE SIGNALS (json):\n"
-        "-----\n"
-        f"{signals}\n"
-        "-----\n\n"
-        "RESUME TEXT BLOCKS (authoritative; use exact substrings from here):\n"
-        "-----\n"
-        f"{resume_blocks.strip()}\n"
-        "-----\n\n"
-        "Task:\n"
-        "- Identify gaps between JD and resume.\n"
-        "- Propose localized edits using ONLY these ops:\n"
-        "  - REPLACE_PHRASE: replace a short phrase that already exists\n"
-        "  - REPLACE_LINE: replace an entire line if phrase replacement cannot work\n"
-        "- Each proposal:\n"
-        "  - section: SUMMARY|SKILLS|EXPERIENCE\n"
-        "  - before: [single exact string from RESUME TEXT BLOCKS]\n"
-        "  - after: [single replacement string]\n"
-        "  - rationale: short justification referencing JD needs\n"
-        "- Do NOT propose edits where 'before' does not exist verbatim in RESUME TEXT BLOCKS.\n"
-        "- Avoid big rewrites; keep changes minimal.\n"
-    )
+ABSOLUTE RULES:
+- Output ONLY valid JSON.
+- No markdown.
+- No commentary.
+- No trailing text.
+- The JSON must parse with json.loads().
 
-    schema = json_schema_for_structured_outputs()
+JSON SHAPE:
+{{
+  "proposals": [
+    {{
+      "section": "SUMMARY|SKILLS|EXPERIENCE",
+      "op": "REPLACE_PHRASE|REPLACE_LINE",
+      "before": ["exact string that already exists"],
+      "after": ["replacement string"],
+      "rationale": "short justification"
+    }}
+  ]
+}}
 
-    resp = client.responses.create(
-        model=model,
-        input=[
-            {"role": "system", "content": sys},
-            {"role": "user", "content": usr},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": schema,
-        },
-    )
+CONSTRAINTS:
+- Propose at most {max_proposals} items.
+- 'before' MUST appear verbatim in the resume text.
+- Prefer REPLACE_PHRASE.
+- Do NOT invent new sections.
+- Do NOT apply edits.
+"""
 
-    # In the Python SDK, Structured Outputs returns a parsed object in output_text sometimes,
-    # but the most reliable approach is to read resp.output[0].content[0].parsed when present.
-    # We'll handle both defensively.
-    parsed = None
+    user_prompt = f"""
+JOB DESCRIPTION:
+{jd_raw}
+
+TEMPLATE SIGNALS (json):
+{json.dumps(signals, indent=2)}
+
+RESUME TEXT (authoritative):
+{resume_blocks}
+
+TASK:
+Identify gaps and propose safe, localized edits.
+"""
 
     try:
-        # Newer SDKs: parsed object is attached to the first content item
-        for out in resp.output:
-            for c in out.content:
-                if hasattr(c, "parsed") and c.parsed is not None:
-                    parsed = c.parsed
-                    break
-            if parsed is not None:
-                break
-    except Exception:
-        parsed = None
+        resp = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": user_prompt.strip()},
+            ],
+        )
+    except AuthenticationError as e:
+        raise RuntimeError(
+            "OpenAI auth failed (invalid API key). Recreate the key and re-export OPENAI_API_KEY."
+        ) from e
+    except RateLimitError as e:
+        # OpenAI uses RateLimitError for both rate limits and insufficient_quota.
+        msg = str(e)
+        if "insufficient_quota" in msg or "check your plan and billing details" in msg:
+            raise RuntimeError(
+                "OpenAI quota/billing blocked this request (insufficient_quota). "
+                "Fix: enable billing or add prepaid credits in the OpenAI dashboard, then rerun."
+            ) from e
+        raise
 
-    if parsed is None:
-        # Fallback: attempt to treat output_text as JSON string (rare in strict schema mode)
-        txt = getattr(resp, "output_text", None)
-        if not txt:
-            raise RuntimeError("OpenAI response missing parsed content")
-        import json
-        parsed = json.loads(txt)
+    text = ""
+    for out in resp.output:
+        for c in out.content:
+            if c.type == "output_text":
+                text += c.text
 
-    proposals = parsed.get("proposals", [])
-    return proposals
+    text = text.strip()
+    if not text:
+        raise RuntimeError("OpenAI returned empty response")
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"OpenAI response was not valid JSON:\n{text}") from e
+
+    if not isinstance(data, dict) or "proposals" not in data:
+        raise RuntimeError(f"Invalid response shape: {data}")
+
+    return data["proposals"]
