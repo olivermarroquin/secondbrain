@@ -151,28 +151,36 @@ def main():
 
     filtered = []
     dropped = 0
+    dropped_notes = []
     for p in proposals:
         before = (p.get("before") or [""])[0]
         section = (p.get("section") or "").strip().upper()
 
+        def drop(reason: str):
+            nonlocal dropped
+            dropped += 1
+            dropped_notes.append({
+                "section": section,
+                "reason": reason,
+                "before": before,
+            })
+
         if not before or not isinstance(before, str):
-            dropped += 1
+            drop("missing_or_nonstring_before")
             continue
 
-        # Must exist somewhere in the extracted blocks
         if before not in resume_blocks:
-            dropped += 1
+            drop("before_not_found_in_resume_blocks")
             continue
 
-        # Must match the claimed section to reduce bad applies
         if section == "SUMMARY" and before not in summary_text:
-            dropped += 1
+            drop("before_not_in_summary_block")
             continue
         if section == "SKILLS" and before not in skills_text:
-            dropped += 1
+            drop("before_not_in_skills_block")
             continue
         if section == "EXPERIENCE" and before not in exp_text:
-            dropped += 1
+            drop("before_not_in_experience_block")
             continue
 
         filtered.append(p)
@@ -192,8 +200,13 @@ def main():
     print()
 
     if dropped:
-        print(f"NOTE: dropped {dropped} unsafe proposal(s) (before not found / wrong section).")
-        print()
+        print(f"NOTE: dropped {dropped} unsafe proposal(s).")
+        # show up to 10 drop reasons for debugging
+        for d in dropped_notes[:10]:
+            b = (d.get("before") or "")
+            b = b if len(b) <= 120 else (b[:119] + "…")
+            print(f"  - [{d.get('section','?')}] {d.get('reason')}: {b}")
+        print()    
 
     if args.diff:
         print_diff(filtered)
