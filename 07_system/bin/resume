@@ -7,7 +7,7 @@ Usage:
   resume load-job --app <APP> [--write-debug] [--root <ROOT>]
   resume select-template --app <APP> [--write] [--root <ROOT>]
   resume emphasis-tags --app <APP> [--write] [--root <ROOT>]
-  resume propose-changes --app <APP> [--force] [--root <ROOT>]
+  resume propose-changes --app <APP> --stub [--force] [--root <ROOT>]
   resume propose-changes-ai --app <APP> [--rr-occurrence N] [--force] [--root <ROOT>]
   resume apply-approvals --app <APP> --approve "1,3" [--force] [--root <ROOT>]
   resume materialize-stub --app <APP> [--force] [--root <ROOT>]
@@ -34,7 +34,18 @@ case "$cmd" in
   load-job)         exec "${RF_SCRIPTS}/rf_load_job.py" "$@";;
   select-template)  exec "${RF_SCRIPTS}/rf_select_template.py" "$@";;
   emphasis-tags)    exec "${RF_SCRIPTS}/rf_emphasis_tags.py" "$@";;
-  propose-changes)  exec "${RF_SCRIPTS}/rf_propose_changes.py" "$@";;
+  propose-changes)  # require_stub_flag_for_propose_changes
+    # STUB ONLY: require explicit --stub so you can't accidentally run stub proposals in real flow
+    if [[ " $* " != *" --stub "* ]]; then
+      die "propose-changes is STUB ONLY. Use: resume propose-changes --app <APP> --stub ... (or use propose-changes-ai for real runs)."
+    fi
+    # Strip --stub before calling the python script (python doesn't accept it)
+    ARGS=()
+    for a in "$@"; do
+      [[ "$a" == "--stub" ]] && continue
+      ARGS+=("$a")
+    done
+    exec "${RF_SCRIPTS}/rf_propose_changes.py" "${ARGS[@]}";;
   propose-changes-ai) exec "${RF_SCRIPTS}/rf_propose_changes_ai.py" "$@";;
   apply-approvals)  exec "${RF_SCRIPTS}/rf_record_approvals.py" "$@";;
   materialize-stub) exec "${RF_SCRIPTS}/rf_materialize_stub.py" "$@";;

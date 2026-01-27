@@ -11,7 +11,7 @@ resume load-job --app "$APP" --write-debug >/dev/null
 resume select-template --app "$APP" --write >/dev/null
 resume emphasis-tags --app "$APP" --write >/dev/null
 RR="${RR_OCCURRENCE:-1}"
-resume propose-changes --app "$APP" --rr-occurrence "$RR" --force >/dev/null
+resume propose-changes --app "$APP" --stub --rr-occurrence "$RR" --force >/dev/null
 
 # approvals: default approve SAFE proposals (ADD + REPLACE_SECTION); optionally set APPROVE="1,3"
 APPROVE_LIST="${APPROVE:-}"
