@@ -9,3 +9,9 @@
 # Secrets
 .env
 *.env
+
+# Resume Factory outputs / job-local artifacts (do not version)
+05_outputs/
+**/resume_refs/
+**/~$*.docx
+
