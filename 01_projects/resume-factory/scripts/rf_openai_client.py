@@ -20,7 +20,7 @@ def _require(name: str) -> str:
 def propose_edits_openai(
     *,
     jd_raw: str,
-    resume_blocks: str,
+    resume_blocks_numbered: str,
     signals: Dict[str, Any],
     jd_terms: List[str],
     model: Optional[str] = None,
@@ -32,7 +32,6 @@ def propose_edits_openai(
     client = OpenAI(timeout=timeout_s)
     model = model or _env("RF_OPENAI_MODEL", "gpt-4o-mini")
 
-    # Keep terms short + stable
     jd_terms = [t.strip() for t in (jd_terms or []) if isinstance(t, str) and t.strip()]
     jd_terms = jd_terms[:30]
 
@@ -46,10 +45,14 @@ ABSOLUTE RULES:
 - No trailing text.
 - JSON must parse via json.loads().
 
-YOU MUST GROUND EVERY PROPOSAL IN THE JD TERMS LIST.
-- Each proposal must include "jd_term" set to EXACTLY one item from the provided JD_TERMS list.
-- The "rationale" must begin with: "JD mentions <jd_term>; ..."
-  where <jd_term> matches the proposal's jd_term EXACTLY (case-insensitive match is ok, but keep spelling identical).
+YOU MUST ANCHOR EVERY PROPOSAL TO AN EXISTING NUMBERED RESUME LINE:
+- Choose "before_ref" from the numbered RESUME text (e.g., S003, K012, E044).
+- The "before" value MUST be the exact text of that referenced line (copy it exactly, without the "S003 |" prefix).
+
+YOU MUST GROUND EVERY PROPOSAL IN THE JD TERMS LIST:
+- Each proposal must include "jd_term" set to EXACTLY one item from JD_TERMS.
+- The rationale must begin exactly:
+  "JD mentions <jd_term>; align resume to JD requirement."
 
 JSON SHAPE:
 {{
@@ -57,20 +60,20 @@ JSON SHAPE:
     {{
       "section": "SUMMARY|SKILLS|EXPERIENCE",
       "op": "REPLACE_PHRASE|REPLACE_LINE",
-      "before": ["exact string that already exists in RESUME TEXT"],
-      "after": ["replacement string"],
+      "before_ref": "S001|K001|E001 ...",
+      "before": ["<exact line text from before_ref>"],
+      "after": ["<replacement string>"],
       "jd_term": "<one term from JD_TERMS>",
-      "rationale": "JD mentions <jd_term>; <short, concrete reason tied to JD>"
+      "rationale": "JD mentions <jd_term>; align resume to JD requirement. <short detail>"
     }}
   ]
 }}
 
 CONSTRAINTS:
 - Propose at most {max_proposals} items.
-- 'before' MUST appear verbatim in the resume text (exact substring).
-- Prefer REPLACE_PHRASE. Use REPLACE_LINE only if needed.
-- Do NOT invent tools/terms not present in the JD_TERMS list.
-- Do NOT apply edits.
+- Prefer REPLACE_PHRASE unless the entire line needs replacement.
+- Keep meaning close to the original line (minimal semantic drift).
+- Avoid generic style edits (clarity/impact/assertiveness). Every change must be JD alignment.
 """
 
     user_prompt = f"""
@@ -83,11 +86,11 @@ JOB DESCRIPTION:
 TEMPLATE SIGNALS (json):
 {json.dumps(signals, indent=2)}
 
-RESUME TEXT (authoritative; 'before' must be exact substring from here):
-{resume_blocks}
+RESUME TEXT (numbered; pick before_ref from here and copy its exact line text into before[0]):
+{resume_blocks_numbered}
 
 TASK:
-Identify JD gaps and propose safe, localized edits grounded in JD_TERMS.
+Propose JD-aligned edits. Anchor each proposal to an existing numbered resume line.
 """
 
     try:
