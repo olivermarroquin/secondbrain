@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+import re
+from collections import Counter
+from typing import List, Set, Tuple
+
+def _norm(s: str) -> str:
+    s = (s or "")
+    s = s.replace("\u2019", "'")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+def _low(s: str) -> str:
+    return _norm(s).lower()
+
+def _canonical(term: str) -> str:
+    t = _low(term)
+    t = t.replace("cicd", "ci/cd")
+    t = t.replace("ci cd", "ci/cd")
+    t = t.replace("test rail", "testrail")
+    t = t.replace("jira", "jira")
+    t = t.replace("rest-assured", "rest assured")
+    return t
+
+def _is_toolish(token: str) -> bool:
+    """
+    Heuristics for 'tool/tech-like' tokens:
+    - contains slash or dot or digits (CI/CD, .NET, JUnit5)
+    - mixed case originally (we don't have original here, so approximate)
+    - length >= 2 and not purely common English
+    """
+    if any(ch in token for ch in ["/", ".", "-", "_"]):
+        return True
+    if any(ch.isdigit() for ch in token):
+        return True
+    return False
+
+def extract_jd_terms(jd_raw: str, max_terms: int = 30) -> List[str]:
+    """
+    Deterministically extract candidate 'must-ground' terms from a JD, without hardcoding a vocabulary.
+    Output terms are canonicalized lowercase strings.
+
+    Sources:
+    - Acronyms: 2+ uppercase letters (API, SDET, CI, CD, SQL) -> normalized
+    - Toolish tokens (contains / . - digits)
+    - Repeated bigrams/trigrams (simple n-grams)
+    """
+    raw = jd_raw or ""
+    txt = _norm(raw)
+    low = txt.lower()
+
+    terms: List[str] = []
+
+    # 1) Acronyms from raw (preserve signal, then canonicalize)
+    acr = re.findall(r"\b[A-Z]{2,}\b", raw)
+    for a in acr:
+        terms.append(_canonical(a))
+
+    # Special case: CI + CD next to each other -> CI/CD
+    if "ci/cd" not in terms and ("CI" in acr and "CD" in acr):
+        terms.append("ci/cd")
+
+    # 2) Tool-ish tokens (e.g., .NET, JUnit5, AWS, Azure-DevOps)
+    toolish = re.findall(r"\b[\w\.\-/]+[0-9\.\-/]*[\w]+[\w\.\-/]*\b", txt)
+    for tok in toolish:
+        tl = _canonical(tok)
+        if len(tl) < 2:
+            continue
+        if _is_toolish(tl):
+            terms.append(tl)
+
+    # 3) N-grams (bigrams/trigrams) that repeat (candidate phrases like "rest assured", "test cases")
+    words = re.findall(r"[a-zA-Z0-9\.\-/]+", txt)
+    words_l = [_canonical(w) for w in words if w.strip()]
+    bigrams = [" ".join(words_l[i:i+2]) for i in range(len(words_l)-1)]
+    trigrams = [" ".join(words_l[i:i+3]) for i in range(len(words_l)-2)]
+
+    # Count and keep repeated phrases (frequency >= 2) and those containing toolish tokens
+    bg_counts = Counter(bigrams)
+    tg_counts = Counter(trigrams)
+
+    for phrase, c in bg_counts.items():
+        if c >= 2 and any(_is_toolish(w) for w in phrase.split()):
+            terms.append(_canonical(phrase))
+    for phrase, c in tg_counts.items():
+        if c >= 2 and any(_is_toolish(w) for w in phrase.split()):
+            terms.append(_canonical(phrase))
+
+    # 4) Deduplicate while preserving importance via frequency
+    # Build a score = frequency in JD (substring count) + toolish bonus
+    uniq: List[str] = []
+    seen: Set[str] = set()
+    for t in terms:
+        t = _canonical(t)
+        if not t or t in seen:
+            continue
+        seen.add(t)
+        uniq.append(t)
+
+    def score(t: str) -> Tuple[int, int]:
+        freq = low.count(t)
+        bonus = 2 if any(_is_toolish(w) for w in t.split()) else 0
+        return (freq + bonus, len(t))
+
+    uniq.sort(key=score, reverse=True)
+
+    # Last sanity: term must appear in JD (case-insensitive substring)
+    out = [t for t in uniq if t and t in low]
+
+    def is_junk(t: str) -> bool:
+        # drop URLs/domains
+        if "http" in t or ".com" in t or ".net" in t or ".org" in t:
+            return True
+        # drop long phrases / sentence fragments
+        if len(t) > 25:
+            return True
+        if len(t.split()) > 3:
+            return True
+        # drop numeric ids
+        if re.fullmatch(r"[0-9\-]{6,}", t):
+            return True
+        # drop HR/legal boilerplate
+        if any(x in t for x in ["disability", "veterans", "eeo", "equal opportunity", "m/f/"]):
+            return True
+        # drop generic verbs that aren't skills
+        if any(x in t for x in ["build/maintain", "establish/enforce", "to succeed", "business-critical"]):
+            return True
+        return False
+
+    out = [t for t in out if not is_junk(t)]
+
+    return out[:max_terms]
+
+
+def rationale_mentions_term(rationale: str, terms: List[str]) -> bool:
+    r = _low(rationale)
+    return any(t in r for t in terms if t)
