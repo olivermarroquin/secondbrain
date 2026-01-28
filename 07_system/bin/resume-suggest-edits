@@ -124,6 +124,7 @@ def main():
     from rf_openai_client import propose_edits_openai
     from rf_proposal_schema import validate_proposals
     from rf_print_diff import print_diff
+    from rf_jd_terms import extract_jd_terms, rationale_mentions_term
 
     # Extract resume text blocks deterministically
     lines = read_docx_lines(docx_path)
@@ -134,10 +135,13 @@ def main():
     if not os.environ.get("OPENAI_API_KEY"):
         die("missing OPENAI_API_KEY (export it in your shell)")
 
+    jd_terms = extract_jd_terms(jd_raw)
+
     proposals = propose_edits_openai(
         jd_raw=jd_raw,
         resume_blocks=resume_blocks,
         signals=sig,
+        jd_terms=jd_terms,
         model=os.environ.get("RF_OPENAI_MODEL", None),
         max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "12")),
         timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "60")),
@@ -183,6 +187,19 @@ def main():
             drop("before_not_in_experience_block")
             continue
 
+        jd_term = (p.get("jd_term") or "").strip().lower()
+        rationale = (p.get("rationale") or "")
+
+        if jd_terms:
+            # Must select a term we provided
+            if not jd_term or jd_term not in [t.lower() for t in jd_terms]:
+                drop("missing_or_invalid_jd_term")
+                continue
+            # Rationale must explicitly include the chosen term
+            if jd_term not in rationale.lower():
+                drop("rationale_missing_jd_term")
+                continue
+
         filtered.append(p)
 
     # Assign deterministic ids (approve step expects stable ids)
@@ -197,6 +214,9 @@ def main():
     print(f"JOB: {jm.get('company','?')} | {jm.get('role_title','?')} | date_found={jm.get('date_found','?')}")
     print(f"TEMPLATE (selected): {template_id} {template_slug}")
     print(f"TEMPLATE PATH: {template_path}")
+    print()
+
+    print(f"JD TERMS (gate): {', '.join(jd_terms) if jd_terms else '(none detected)'}")
     print()
 
     if dropped:
