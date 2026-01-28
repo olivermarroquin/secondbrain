@@ -203,10 +203,16 @@ def main():
             drop("missing_or_invalid_before_ref")
             continue
 
-        expected = line_index[before_ref]["text"]
-        if before != expected:
-            drop("before_text_mismatch_for_before_ref")
-            continue
+        # Allow fuzzy matching for SUMMARY (long lines often wrap/truncate)
+        resume_line_text = line_index.get(before_ref, {}).get("text", "")
+        if section == "SUMMARY":
+            if before.lower() not in resume_line_text.lower():
+                drop("before_text_mismatch_for_before_ref")
+                continue
+        else:
+            if before != resume_line_text:
+                drop("before_text_mismatch_for_before_ref")
+                continue
 
         ref_section = line_index[before_ref]["section"]
         if section and section != ref_section:
@@ -246,11 +252,15 @@ def main():
         before_line = line_index.get(before_ref, {}).get("text", "")
 
         if cat == "PERF":
-            # If the target line is clearly SQL/database-only, don't append perf/load unless perf cues already exist
-            if line_has_sql_cues(before_line) and not line_has_perf_cues(before_line):
-                drop("semantic_mismatch_perf_term_in_sql_line")
-                continue
-
+            # Allow perf/load terms on SQL lines IF backend/system context exists
+            if line_has_sql_cues(before_line):
+                backend_ok = any(x in before_line.lower() for x in [
+                    "backend", "back-end", "system", "pipeline", "integration", "service"
+                ])
+                if not backend_ok and not line_has_perf_cues(before_line):
+                    drop("semantic_mismatch_perf_term_in_sql_line")
+                    continue
+        
         if cat == "UX":
             # Avoid recruiter-weird phrasing like "UI/UX Selenium infrastructure" unless the line already signals UI/UX
             if "selenium" in before_line.lower() and not line_has_ux_cues(before_line):
