@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from docx import Document
 
@@ -91,8 +90,7 @@ def locate_sections(lines: List[str]) -> Tuple[List[str], List[str], List[str], 
 
 def format_blocks_for_prompt(header: List[str], summary: List[str], skills: List[str], exp: List[str], max_exp_lines: int = 80) -> str:
     """
-    Create a bounded, prompt-friendly representation.
-    We deliberately cap EXPERIENCE lines to avoid huge prompts.
+    Backward-compatible (un-numbered) representation.
     """
     exp2 = exp[:max_exp_lines]
     if len(exp) > max_exp_lines:
@@ -107,3 +105,49 @@ def format_blocks_for_prompt(header: List[str], summary: List[str], skills: List
         "=== RESUME_SKILLS ===\n" + join(skills) + "\n\n"
         "=== RESUME_EXPERIENCE ===\n" + join(exp2) + "\n"
     )
+
+def format_numbered_blocks_for_prompt(
+    header: List[str],
+    summary: List[str],
+    skills: List[str],
+    exp: List[str],
+    max_exp_lines: int = 80
+) -> Tuple[str, Dict[str, Dict[str, str]]]:
+    """
+    Numbered resume blocks for deterministic targeting.
+
+    Returns:
+      (prompt_text, line_index)
+
+    line_index maps:
+      ref -> { "section": "HEADER|SUMMARY|SKILLS|EXPERIENCE", "text": "<exact line>" }
+
+    Refs:
+      H001.., S001.., K001.., E001..
+    """
+    exp2 = exp[:max_exp_lines]
+    if len(exp) > max_exp_lines:
+        exp2 = exp2 + ["", f"... (truncated: {len(exp) - max_exp_lines} more lines)"]
+
+    line_index: Dict[str, Dict[str, str]] = {}
+
+    def emit(section: str, prefix: str, block: List[str]) -> str:
+        out: List[str] = []
+        n = 0
+        for line in block:
+            if not line.strip():
+                out.append("")
+                continue
+            n += 1
+            ref = f"{prefix}{n:03d}"
+            line_index[ref] = {"section": section, "text": line}
+            out.append(f"{ref} | {line}")
+        return "\n".join(out).strip()
+
+    txt = (
+        "=== RESUME_HEADER (numbered) ===\n" + emit("HEADER", "H", header) + "\n\n"
+        "=== RESUME_SUMMARY (numbered) ===\n" + emit("SUMMARY", "S", summary) + "\n\n"
+        "=== RESUME_SKILLS (numbered) ===\n" + emit("SKILLS", "K", skills) + "\n\n"
+        "=== RESUME_EXPERIENCE (numbered) ===\n" + emit("EXPERIENCE", "E", exp2) + "\n"
+    )
+    return txt, line_index
