@@ -5,12 +5,14 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime, timezone
 
+LIB = Path("~/secondbrain/01_projects/resume-factory/lib").expanduser()
+sys.path.insert(0, str(LIB))
+from agent_adapters import local_backend  # type: ignore
 
 def die(msg: str, code: int = 2) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
@@ -40,8 +42,16 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def get_backend() -> str:
+    # v1: local-only. Keep stable env contract for future adapters.
+    b = os.environ.get("RF_AGENT_BACKEND", "local").strip().lower()
+    if b in ("", "default"):
+        b = "local"
+    return b
+
+
 def _contains_placeholders(s: str) -> bool:
-    return ("[PROPOSED:" in s) or ("[PLACEHOLDER:" in s) or ("[STUB" in s)
+    return ("[PROPOSED:" in s) or ("[PLACEHOLDER:" in s)
 
 
 def extract_template_headings(master_docx: Path) -> list[str]:
@@ -146,8 +156,6 @@ def _propose_local(ctx: AgentContext, rr_occurrence: int) -> str:
     """
     selected_slug = Path(ctx.template_dir).name
 
-    # Minimal: always propose a SUMMARY replace + a couple TECHNICAL SKILL adds + one RR add.
-    # You will replace this logic later with an actual model call, but the format stays stable.
     lines: list[str] = []
     lines.append("# Proposed Resume Changes (AI)")
     lines.append("")
@@ -157,9 +165,7 @@ def _propose_local(ctx: AgentContext, rr_occurrence: int) -> str:
     lines.append(f"- GENERATED_UTC: {now_utc()}")
     lines.append("")
 
-    # Always target SUMMARY (non-colon) — compiler replace-section logic anchors off headings anyway.
     n = 1
-
     lines += [
         f"{n})",
         "SECTION: SUMMARY",
@@ -172,7 +178,7 @@ def _propose_local(ctx: AgentContext, rr_occurrence: int) -> str:
     ]
     n += 1
 
-    tech_section = "TECHNICAL SKILL"  # will be normalized later for patches.json
+    tech_section = "TECHNICAL SKILL"
     lines += [
         f"{n})",
         f"SECTION: {tech_section}",
@@ -203,7 +209,7 @@ def _propose_local(ctx: AgentContext, rr_occurrence: int) -> str:
 
     out = "\n".join(lines).rstrip() + "\n"
     if _contains_placeholders(out):
-        die("Proposer produced placeholder/stub text — forbidden.")
+        die("Proposer produced placeholder text — forbidden.")
     return out
 
 
@@ -230,27 +236,35 @@ def _parse_proposed_changes(md: str) -> dict[int, dict]:
 
     for raw in lines:
         line = raw.rstrip("\n")
+
         m = re.match(r"^(\d+)\)\s*$", line)
         if m:
             flush()
             cur_num = int(m.group(1))
             cur = {"num": cur_num}
             continue
+
         if cur_num is None:
             continue
 
         if line.startswith("SECTION: "):
             cur["section"] = line.split("SECTION: ", 1)[1].strip()
             continue
+
         if line.startswith("CHANGE: "):
             cur["change"] = line.split("CHANGE: ", 1)[1].strip()
             continue
+
         if line.startswith("SUBSECTION: "):
             cur["subsection"] = line.split("SUBSECTION: ", 1)[1].strip()
             continue
+
         if line.startswith("SUBSECTION_OCCURRENCE: "):
             v = line.split("SUBSECTION_OCCURRENCE: ", 1)[1].strip()
-            cur["subsection_occurrence"] = int(v)
+            try:
+                cur["subsection_occurrence"] = int(v)
+            except ValueError:
+                die(f"Invalid SUBSECTION_OCCURRENCE (not int): {v}")
             continue
 
         if line == "TO:":
@@ -269,9 +283,12 @@ def _parse_proposed_changes(md: str) -> dict[int, dict]:
         if line.startswith("TO: "):
             cur["to_text"] = line.split("TO: ", 1)[1].strip()
             continue
+
         if line.startswith("FROM: "):
             cur["from_text"] = line.split("FROM: ", 1)[1].strip()
             continue
+
+        continue
 
     flush()
     return proposals
@@ -318,10 +335,9 @@ def _make_patch_item(p: dict, template_headings: list[str]) -> dict:
             die(f"DELETE proposal {p.get('num')} missing FROM")
         item["from_text"] = from_text.strip()
 
-    # hard ban placeholders inside patch content
     blob = json.dumps(item, ensure_ascii=False)
     if _contains_placeholders(blob):
-        die(f"Patch contains placeholders/stubs — forbidden (num {item.get('num')}).")
+        die(f"Patch contains placeholders — forbidden (num {item.get('num')}).")
 
     return item
 
@@ -329,8 +345,18 @@ def _make_patch_item(p: dict, template_headings: list[str]) -> dict:
 def run_propose(app: Path, rr_occurrence: int, out_md: Path, force: bool) -> None:
     if out_md.exists() and not force:
         die(f"Refusing to overwrite existing file (use --force): {out_md}")
-    ctx = build_context(app)
+
+    ctx = local_backend.build_context(app, load_json=load_json, read_text=read_text)
+    
+    backend = get_backend()
+    if backend != "local":
+        die(f"Unsupported RF_AGENT_BACKEND for propose (v1 supports local only): {backend}")
+
     md = _propose_local(ctx, rr_occurrence=rr_occurrence)
+
+    if _contains_placeholders(md):
+        die("Agent runner propose output contains placeholders — forbidden.")
+
     write_text(out_md, md)
     print(str(out_md))
 
@@ -339,7 +365,16 @@ def run_materialize(app: Path, in_md: Path, approvals_json: Path, out_patches: P
     if out_patches.exists() and not force:
         die(f"Refusing to overwrite existing patches.json (use --force): {out_patches}")
 
-    ctx = build_context(app)
+    ctx = local_backend.build_context(app, load_json=load_json, read_text=read_text)
+    
+    # Extract template headings lazily (docgen-only dependency)
+    from agent_adapters.local_backend import extract_template_headings  # type: ignore
+    master = ctx.template_dir / "resume-master.docx"
+    ctx.template_headings = extract_template_headings(master)
+        
+    backend = get_backend()
+    if backend != "local":
+        die(f"Unsupported RF_AGENT_BACKEND for materialize (v1 supports local only): {backend}")
 
     approvals = load_json(approvals_json)
     approved_nums = approvals.get("approved_change_numbers")
@@ -368,34 +403,42 @@ def run_materialize(app: Path, in_md: Path, approvals_json: Path, out_patches: P
         "patches": patch_items,
     }
 
+    if out.get("schema") != "rf_patches_v1":
+        die("Agent runner materialize output schema mismatch (expected rf_patches_v1).")
+    blob = json.dumps(out, ensure_ascii=False)
+    if _contains_placeholders(blob):
+        die("Agent runner materialize output contains placeholders — forbidden.")
+
     write_text(out_patches, json.dumps(out, indent=2) + "\n")
     print(str(out_patches))
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(prog="rf_agent_runner")
-    ap.add_argument("--mode", required=True, choices=["propose", "materialize"], help="Agent runner mode")
-    ap.add_argument("--app", required=True, help="Job folder path (APP)")
-    ap.add_argument("--root", default="~/secondbrain", help="Secondbrain root (default: ~/secondbrain)")
-    ap.add_argument("--rr-occurrence", type=int, default=1, help="1-indexed RR occurrence (propose mode)")
-    ap.add_argument("--force", action="store_true", help="Overwrite outputs")
+    ap.add_argument("--mode", required=True, choices=["propose", "materialize"])
+    ap.add_argument("--app", required=True)
+    ap.add_argument("--root", default="~/secondbrain")
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--rr-occurrence", type=int, default=1)
     args = ap.parse_args()
 
     app = Path(args.app).expanduser().resolve()
     pipe = app / "resume_refs" / "resume_pipeline"
-
-    proposed_md = pipe / "proposed-changes.md"
-    approvals_json = pipe / "approvals.json"
-    patches_json = pipe / "patches.json"
+    pipe.mkdir(parents=True, exist_ok=True)
 
     if args.mode == "propose":
-        run_propose(app, rr_occurrence=args.rr_occurrence, out_md=proposed_md, force=args.force)
-    else:
-        # materialize
-        for req in (proposed_md, approvals_json):
-            if not req.exists():
-                die(f"Missing required file for materialize: {req}")
-        run_materialize(app, in_md=proposed_md, approvals_json=approvals_json, out_patches=patches_json, force=args.force)
+        out_md = pipe / "proposed-changes.md"
+        run_propose(app, rr_occurrence=args.rr_occurrence, out_md=out_md, force=args.force)
+        return
+
+    in_md = pipe / "proposed-changes.md"
+    approvals_json = pipe / "approvals.json"
+    out_patches = pipe / "patches.json"
+    if not in_md.exists():
+        die(f"Missing required pipeline artifact: {in_md}")
+    if not approvals_json.exists():
+        die(f"Missing required pipeline artifact: {approvals_json}")
+    run_materialize(app, in_md=in_md, approvals_json=approvals_json, out_patches=out_patches, force=args.force)
 
 
 if __name__ == "__main__":

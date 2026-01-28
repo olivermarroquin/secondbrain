@@ -110,44 +110,31 @@ def extract_jd_terms(jd_raw: str, max_terms: int = 30) -> List[str]:
     out = [t for t in uniq if t and t in low]
 
     def is_junk(t: str) -> bool:
-        # drop trivial abbreviations/fillers
-        if t in {"e.g", "eg", "i.e", "ie"}:
-            return True
+    # drop trivial abbreviations/fillers
+    if t in {"e.g", "eg", "i.e", "ie"}:
+        return True
 
-        # drop employment-type/marketing artifacts (not resume skills)
-        if t in {"contract/temporary", "full-time", "ai-matched", "ai-powered"}:
-            return True
-
-        # drop years like 2024, 2025
-        if re.fullmatch(r"20\d{2}", t):
-            return True
-
-        # drop app-marketing artifacts like 1-tap
-        if "1-tap" in t:
-            return True
+    # drop employment-type/marketing artifacts (not resume skills)
+    if t in {"contract/temporary", "full-time", "ai-matched", "ai-powered"}:
+        return True
 
         # drop URLs/domains
         if "http" in t or ".com" in t or ".net" in t or ".org" in t:
             return True
-
         # drop long phrases / sentence fragments
         if len(t) > 25:
             return True
         if len(t.split()) > 3:
             return True
-
         # drop numeric ids
         if re.fullmatch(r"[0-9\-]{6,}", t):
             return True
-
         # drop HR/legal boilerplate
         if any(x in t for x in ["disability", "veterans", "eeo", "equal opportunity", "m/f/"]):
             return True
-
         # drop generic verbs that aren't skills
         if any(x in t for x in ["build/maintain", "establish/enforce", "to succeed"]):
             return True
-
         return False
 
     out = [t for t in out if not is_junk(t)]
