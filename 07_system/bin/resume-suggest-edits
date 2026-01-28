@@ -78,6 +78,29 @@ def select_template(family_root: Path, jd_text_norm: str, requested: str):
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows[0], rows
 
+# ---- semantic guardrails (deterministic) ----
+def term_category(term: str) -> str:
+    t = (term or "").lower()
+    if any(x in t for x in ["performance/load", "performance/load/stress", "load/stress", "load testing", "stress testing"]):
+        return "PERF"
+    if any(x in t for x in ["ui/ux", "ux"]):
+        return "UX"
+    if "sql" in t:
+        return "SQL"
+    return "GEN"
+
+def line_has_perf_cues(line: str) -> bool:
+    l = (line or "").lower()
+    return any(x in l for x in ["performance", "load", "stress", "jmeter", "gatling", "k6"])
+
+def line_has_sql_cues(line: str) -> bool:
+    l = (line or "").lower()
+    return any(x in l for x in ["sql", "database", "jdbc", "query"])
+
+def line_has_ux_cues(line: str) -> bool:
+    l = (line or "").lower()
+    return any(x in l for x in ["ui", "ux", "user experience", "front end", "frontend", "ui/ux"])
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app", required=True)
@@ -130,18 +153,20 @@ def main():
     lines = read_docx_lines(docx_path)
     header, summary, skills, exp = locate_sections(lines)
     resume_blocks_numbered, line_index = format_numbered_blocks_for_prompt(header, summary, skills, exp, max_exp_lines=90)
+    resume_all_text = "\n".join([v["text"] for v in line_index.values()]).lower()
 
     # Provider call (AI proposes only)
     if not os.environ.get("OPENAI_API_KEY"):
         die("missing OPENAI_API_KEY (export it in your shell)")
 
     jd_terms = extract_jd_terms(jd_raw)
+    missing_terms = [t for t in jd_terms if t and t.lower() not in resume_all_text]
 
     proposals = propose_edits_openai(
         jd_raw=jd_raw,
         resume_blocks_numbered=resume_blocks_numbered,
         signals=sig,
-        jd_terms=jd_terms,
+        jd_terms=missing_terms,
         model=os.environ.get("RF_OPENAI_MODEL", None),
         max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "12")),
         timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "60")),
@@ -211,6 +236,27 @@ def main():
                 drop("rationale_missing_jd_term")
                 continue
 
+        # Missing-term gate: reject proposals for terms already present in resume
+        if jd_term and jd_term in resume_all_text:
+            drop("jd_term_already_present_in_resume")
+            continue
+
+        # ---- semantic guardrails (stop "keyword stuffing" into wrong lines) ----
+        cat = term_category(jd_term)
+        before_line = line_index.get(before_ref, {}).get("text", "")
+
+        if cat == "PERF":
+            # If the target line is clearly SQL/database-only, don't append perf/load unless perf cues already exist
+            if line_has_sql_cues(before_line) and not line_has_perf_cues(before_line):
+                drop("semantic_mismatch_perf_term_in_sql_line")
+                continue
+
+        if cat == "UX":
+            # Avoid recruiter-weird phrasing like "UI/UX Selenium infrastructure" unless the line already signals UI/UX
+            if "selenium" in before_line.lower() and not line_has_ux_cues(before_line):
+                drop("semantic_mismatch_ux_term_in_selenium_line")
+                continue       
+    
         filtered.append(p)
 
     # Assign deterministic ids (approve step expects stable ids)
@@ -228,6 +274,9 @@ def main():
     print()
 
     print(f"JD TERMS (gate): {', '.join(jd_terms) if jd_terms else '(none detected)'}")
+    print()
+
+    print(f"JD TERMS (missing-only gate): {', '.join(missing_terms) if missing_terms else '(none missing)'}")
     print()
 
     if dropped:
