@@ -120,7 +120,7 @@ def main():
     import sys
     sys.path.insert(0, str(scripts_dir))
 
-    from rf_docx_extract import read_docx_lines, locate_sections, format_blocks_for_prompt
+    from rf_docx_extract import read_docx_lines, locate_sections, format_numbered_blocks_for_prompt
     from rf_openai_client import propose_edits_openai
     from rf_proposal_schema import validate_proposals
     from rf_print_diff import print_diff
@@ -129,7 +129,7 @@ def main():
     # Extract resume text blocks deterministically
     lines = read_docx_lines(docx_path)
     header, summary, skills, exp = locate_sections(lines)
-    resume_blocks = format_blocks_for_prompt(header, summary, skills, exp, max_exp_lines=90)
+    resume_blocks_numbered, line_index = format_numbered_blocks_for_prompt(header, summary, skills, exp, max_exp_lines=90)
 
     # Provider call (AI proposes only)
     if not os.environ.get("OPENAI_API_KEY"):
@@ -139,7 +139,7 @@ def main():
 
     proposals = propose_edits_openai(
         jd_raw=jd_raw,
-        resume_blocks=resume_blocks,
+        resume_blocks_numbered=resume_blocks_numbered,
         signals=sig,
         jd_terms=jd_terms,
         model=os.environ.get("RF_OPENAI_MODEL", None),
@@ -172,11 +172,22 @@ def main():
         if not before or not isinstance(before, str):
             drop("missing_or_nonstring_before")
             continue
-
-        if before not in resume_blocks:
-            drop("before_not_found_in_resume_blocks")
+        
+        before_ref = (p.get("before_ref") or "").strip()
+        if not before_ref or before_ref not in line_index:
+            drop("missing_or_invalid_before_ref")
             continue
 
+        expected = line_index[before_ref]["text"]
+        if before != expected:
+            drop("before_text_mismatch_for_before_ref")
+            continue
+
+        ref_section = line_index[before_ref]["section"]
+        if section and section != ref_section:
+            drop("section_mismatch_for_before_ref")
+            continue
+        
         if section == "SUMMARY" and before not in summary_text:
             drop("before_not_in_summary_block")
             continue
