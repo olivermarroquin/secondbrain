@@ -359,8 +359,25 @@ def main():
     print(f"WROTE: {log_path}")
 
     if args.open:
+        # Optional override: open with a specific macOS app name OR bundle id.
+        # If LibreOffice is requested, use soffice directly (more reliable than macOS 'open' for delivering file-open events).
+        target = (os.environ.get("RESUME_OPEN_WITH") or "").strip()
         try:
-            subprocess.run(["open", str(out_docx)], check=False)
+            lo_soffice = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+            t = target.lower()
+
+            if target and ("libreoffice" in t or "org.libreoffice" in t) and os.path.exists(lo_soffice):
+                subprocess.Popen([lo_soffice, "--writer", str(out_docx)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["osascript", "-e", 'tell application "LibreOffice" to activate'], check=False)
+
+            elif target:
+                if "." in target:
+                    subprocess.run(["open", "-b", target, str(out_docx)], check=False)
+                else:
+                    subprocess.run(["open", "-a", target, str(out_docx)], check=False)
+
+            else:
+                subprocess.run(["open", str(out_docx)], check=False)
         except Exception:
             pass
 
