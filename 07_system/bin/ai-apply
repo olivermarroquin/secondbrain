@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: ai-apply <patchfile>"
+  exit 1
+fi
+
+PATCH="$1"
+
+if [ ! -f "$PATCH" ]; then
+  echo "Error: patch not found: $PATCH"
+  exit 1
+fi
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: not inside a git repo. Run: git init"
+  exit 1
+fi
+
+# Hard allowlist: only these roots can be patched
+ALLOW_RE='^(07_system/bin/|01_projects/resume-factory/|01_projects/jobs/|03_assets/templates/resumes/)'
+
+# Reject forbidden dirs (you can tighten further)
+DENY_RE='^(07_system/state/|05_outputs/|\.git/|01_projects/jobs/[^/]+/[^/]+/[^/]+/resume_refs/)'
+
+# Extract target file paths from patch headers
+TARGETS="$(grep -E '^\+\+\+ ' "$PATCH" | sed 's/^\+\+\+ [ab]\///' | awk '{print $1}' | sed 's/^\/dev\/null$//' | sort -u)"
+
+if [ -z "$TARGETS" ]; then
+  echo "Error: no target files found in patch."
+  exit 1
+fi
+
+# Validate allow/deny
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  if echo "$f" | grep -qE "$DENY_RE"; then
+    echo "Error: patch touches forbidden path: $f"
+    exit 1
+  fi
+  if ! echo "$f" | grep -qE "$ALLOW_RE"; then
+    echo "Error: patch touches non-allowlisted path: $f"
+    exit 1
+  fi
+done <<< "$TARGETS"
+
+echo "Patch targets:"
+echo "$TARGETS"
+echo
+
+echo "Checking patch applicability..."
+git apply --check "$PATCH"
+
+echo "Applying patch..."
+git apply "$PATCH"
+
+echo
+echo "Applied. Current diff stat:"
+git diff --stat

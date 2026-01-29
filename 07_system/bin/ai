@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+if [ "$#" -eq 0 ]; then
+  echo 'Usage: ai "your prompt here"'
+  exit 1
+fi
+
+openai api chat.completions.create \
+  -m gpt-4.1 \
+  -g user "$*"

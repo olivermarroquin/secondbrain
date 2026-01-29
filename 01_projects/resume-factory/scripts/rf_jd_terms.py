@@ -15,145 +15,178 @@ def _low(s: str) -> str:
 
 def _canonical(term: str) -> str:
     t = _low(term)
-    t = t.replace("cicd", "ci/cd")
-    t = t.replace("ci cd", "ci/cd")
-    t = t.replace("test rail", "testrail")
-    t = t.replace("jira", "jira")
-    t = t.replace("rest-assured", "rest assured")
-    t = t.replace("as a full-stack", "full-stack")
-    t = t.replace("a full-stack", "full-stack")
-    return t
+    replacements = {
+        "cicd": "ci/cd",
+        "ci cd": "ci/cd",
+        "rest-assured": "rest assured",
+        "test rail": "testrail",
+        "as a full-stack": "full-stack",
+        "a full-stack": "full-stack",
+    }
+    for k, v in replacements.items():
+        t = t.replace(k, v)
+    return t.strip()
 
 def _is_toolish(token: str) -> bool:
-    """
-    Heuristics for 'tool/tech-like' tokens:
-    - contains slash or dot or digits (CI/CD, .NET, JUnit5)
-    - mixed case originally (we don't have original here, so approximate)
-    - length >= 2 and not purely common English
-    """
     if any(ch in token for ch in ["/", ".", "-", "_"]):
         return True
     if any(ch.isdigit() for ch in token):
         return True
     return False
 
-def extract_jd_terms(jd_raw: str, max_terms: int = 30) -> List[str]:
-    """
-    Deterministically extract candidate 'must-ground' terms from a JD, without hardcoding a vocabulary.
-    Output terms are canonicalized lowercase strings.
+TRIVIAL_ABBREVIATIONS = {"e.g", "eg", "i.e", "ie"}
+EMPLOYMENT_MARKETING = {"full-time", "contract/temporary", "ai-matched", "ai-powered"}
+LEGAL_HR = {"eeo", "equal opportunity", "disability", "veterans", "m/f/"}
+GENERIC_VERB_FRAGMENTS = {"build/maintain", "establish/enforce", "to succeed"}
 
-    Sources:
-    - Acronyms: 2+ uppercase letters (API, SDET, CI, CD, SQL) -> normalized
-    - Toolish tokens (contains / . - digits)
-    - Repeated bigrams/trigrams (simple n-grams)
-    """
+# Explicit junk tokens observed in real JDs (keep this list tight and auditable)
+EXPLICIT_JUNK_TERMS = {
+    "education/certification",
+    "stack-ranked",
+    "required -",
+    "required.-",
+    "required. -",
+    "ad",
+    "ai",
+}
+
+def _is_junk(term: str) -> bool:
+    t = term.strip()
+    if not t:
+        return True
+
+    # normalize for comparisons
+    tl = t.lower()
+
+    # exact junk terms
+    if tl in EXPLICIT_JUNK_TERMS:
+        return True
+
+    # trivial abbreviations
+    if tl in TRIVIAL_ABBREVIATIONS:
+        return True
+
+    # employment / marketing artifacts
+    if tl in EMPLOYMENT_MARKETING:
+        return True
+
+    # HR / legal boilerplate
+    if any(x in tl for x in LEGAL_HR):
+        return True
+
+    # generic verb fragments
+    if any(x in tl for x in GENERIC_VERB_FRAGMENTS):
+        return True
+
+    # years (e.g. 2024)
+    if re.fullmatch(r"20\d{2}", tl):
+        return True
+
+    # money/benefits tokens (401k, etc.)
+    if re.fullmatch(r"\d{3,4}k", tl):
+        return True
+
+    # decimals / rates (53.85, 63.85)
+    if re.fullmatch(r"\d+\.\d+", tl):
+        return True
+
+    # times (8am, 5pm)
+    if re.fullmatch(r"\d{1,2}(am|pm)", tl):
+        return True
+
+    # ranges like 5-7 (years), 1-2, etc.
+    if re.fullmatch(r"\d{1,2}-\d{1,2}", tl):
+        return True
+
+    # pure numbers (30, 12)
+    if re.fullmatch(r"\d+", tl):
+        return True
+
+    # alphanumeric IDs (cxsapwma1)
+    if re.fullmatch(r"[a-z]{3,}\d+[a-z0-9]*", tl):
+        return True
+
+    # formatting artifacts: trailing punctuation/dashes
+    if re.search(r"[.\-]{2,}", tl):
+        return True
+    if re.fullmatch(r".*-\s*$", tl):
+        return True
+
+    # hyphenated adjective junk (high-quality, must-have, short-term)
+    if tl in {"high-quality", "must-have", "short-term"}:
+        return True
+
+    # URLs / domains
+    if any(x in tl for x in ("http", ".com", ".net", ".org")):
+        return True
+
+    # numeric identifiers
+    if re.fullmatch(r"[0-9\-]{6,}", tl):
+        return True
+
+    # overly long / sentence-like fragments
+    if len(tl) > 25:
+        return True
+    if len(tl.split()) > 3:
+        return True
+
+    return False
+
+def extract_jd_terms(jd_raw: str, max_terms: int = 30) -> List[str]:
     raw = jd_raw or ""
     txt = _norm(raw)
     low = txt.lower()
 
-    terms: List[str] = []
+    candidates: List[str] = []
 
-    # 1) Acronyms from raw (preserve signal, then canonicalize)
-    acr = re.findall(r"\b[A-Z]{2,}\b", raw)
-    for a in acr:
-        terms.append(_canonical(a))
+    acronyms = re.findall(r"\b[A-Z]{2,}\b", raw)
+    for a in acronyms:
+        candidates.append(_canonical(a))
 
-    # Special case: CI + CD next to each other -> CI/CD
-    if "ci/cd" not in terms and ("CI" in acr and "CD" in acr):
-        terms.append("ci/cd")
+    if "ci/cd" not in candidates and ("CI" in acronyms and "CD" in acronyms):
+        candidates.append("ci/cd")
 
-    # 2) Tool-ish tokens (e.g., .NET, JUnit5, AWS, Azure-DevOps)
-    toolish = re.findall(r"\b[\w\.\-/]+[0-9\.\-/]*[\w]+[\w\.\-/]*\b", txt)
-    for tok in toolish:
-        tl = _canonical(tok)
-        if len(tl) < 2:
-            continue
-        if _is_toolish(tl):
-            terms.append(tl)
+    toolish_tokens = re.findall(r"\b[\w\./_-]+[0-9\./_-]*[\w]+[\w\./_-]*\b", txt)
+    for tok in toolish_tokens:
+        tt = _canonical(tok)
+        if len(tt) >= 2 and _is_toolish(tt):
+            candidates.append(tt)
 
-    # 3) N-grams (bigrams/trigrams) that repeat (candidate phrases like "rest assured", "test cases")
-    words = re.findall(r"[a-zA-Z0-9\.\-/]+", txt)
+    words = re.findall(r"[a-zA-Z0-9\./_-]+", txt)
     words_l = [_canonical(w) for w in words if w.strip()]
-    bigrams = [" ".join(words_l[i:i+2]) for i in range(len(words_l)-1)]
-    trigrams = [" ".join(words_l[i:i+3]) for i in range(len(words_l)-2)]
 
-    # Count and keep repeated phrases (frequency >= 2) and those containing toolish tokens
+    bigrams = [" ".join(words_l[i:i+2]) for i in range(len(words_l) - 1)]
+    trigrams = [" ".join(words_l[i:i+3]) for i in range(len(words_l) - 2)]
+
     bg_counts = Counter(bigrams)
     tg_counts = Counter(trigrams)
 
-    for phrase, c in bg_counts.items():
-        if c >= 2 and any(_is_toolish(w) for w in phrase.split()):
-            terms.append(_canonical(phrase))
-    for phrase, c in tg_counts.items():
-        if c >= 2 and any(_is_toolish(w) for w in phrase.split()):
-            terms.append(_canonical(phrase))
+    for phrase, count in bg_counts.items():
+        if count >= 2 and any(_is_toolish(w) for w in phrase.split()):
+            candidates.append(_canonical(phrase))
 
-    # 4) Deduplicate while preserving importance via frequency
-    # Build a score = frequency in JD (substring count) + toolish bonus
+    for phrase, count in tg_counts.items():
+        if count >= 2 and any(_is_toolish(w) for w in phrase.split()):
+            candidates.append(_canonical(phrase))
+
     uniq: List[str] = []
     seen: Set[str] = set()
-    for t in terms:
-        t = _canonical(t)
-        if not t or t in seen:
-            continue
-        seen.add(t)
-        uniq.append(t)
 
-    def score(t: str) -> Tuple[int, int]:
-        freq = low.count(t)
-        bonus = 2 if any(_is_toolish(w) for w in t.split()) else 0
-        return (freq + bonus, len(t))
+    for tt in candidates:
+        if not tt or tt in seen:
+            continue
+        if _is_junk(tt):
+            continue
+        seen.add(tt)
+        uniq.append(tt)
+
+    def score(term: str) -> Tuple[int, int]:
+        freq = low.count(term)
+        bonus = 2 if any(_is_toolish(w) for w in term.split()) else 0
+        return (freq + bonus, len(term))
 
     uniq.sort(key=score, reverse=True)
-
-    # Last sanity: term must appear in JD (case-insensitive substring)
-    out = [t for t in uniq if t and t in low]
-
-    def is_junk(t: str) -> bool:
-        # drop trivial abbreviations/fillers
-        if t in {"e.g", "eg", "i.e", "ie"}:
-            return True
-
-        # drop employment-type/marketing artifacts (not resume skills)
-        if t in {"contract/temporary", "full-time", "ai-matched", "ai-powered"}:
-            return True
-
-        # drop years like 2024, 2025
-        if re.fullmatch(r"20\d{2}", t):
-            return True
-
-        # drop app-marketing artifacts like 1-tap
-        if "1-tap" in t:
-            return True
-
-        # drop URLs/domains
-        if "http" in t or ".com" in t or ".net" in t or ".org" in t:
-            return True
-
-        # drop long phrases / sentence fragments
-        if len(t) > 25:
-            return True
-        if len(t.split()) > 3:
-            return True
-
-        # drop numeric ids
-        if re.fullmatch(r"[0-9\-]{6,}", t):
-            return True
-
-        # drop HR/legal boilerplate
-        if any(x in t for x in ["disability", "veterans", "eeo", "equal opportunity", "m/f/"]):
-            return True
-
-        # drop generic verbs that aren't skills
-        if any(x in t for x in ["build/maintain", "establish/enforce", "to succeed"]):
-            return True
-
-        return False
-
-    out = [t for t in out if not is_junk(t)]
-
-    return out[:max_terms]
-
+    return uniq[:max_terms]
 
 def rationale_mentions_term(rationale: str, terms: List[str]) -> bool:
     r = _low(rationale)

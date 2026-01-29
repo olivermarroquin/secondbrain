@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -lt 2 ]; then
+  echo "Usage: ai-diff <slug> <file1> [file2 ...]"
+  exit 1
+fi
+
+SLUG="$1"; shift
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: not inside a git repo. Run: git init"
+  exit 1
+fi
+
+TS="$(date +%Y%m%d_%H%M%S)"
+OUTDIR="07_system/state/patches"
+OUTPATCH="${OUTDIR}/${TS}_${SLUG}.patch"
+
+mkdir -p "$OUTDIR"
+
+# Build input payload (bounded)
+PAYLOAD="You are generating a unified diff patch. Output ONLY the diff. No explanation.
+Constraints:
+- Edit only the provided files.
+- Keep changes minimal and localized.
+- Do not reformat unrelated code.
+- Do not change behavior unless explicitly requested.
+- Must be a valid unified diff starting with --- / +++.
+
+TASK:
+$SLUG
+
+FILES:
+"
+
+for f in "$@"; do
+  if [ ! -f "$f" ]; then
+    echo "Error: file not found: $f"
+    exit 1
+  fi
+  PAYLOAD="${PAYLOAD}\n\n===== FILE: ${f} =====\n"
+  PAYLOAD="${PAYLOAD}\n$(cat "$f")\n"
+done
+
+# Call your existing ai wrapper
+PATCH="$(ai "$PAYLOAD")"
+
+# Basic sanity: must look like a diff
+if ! echo "$PATCH" | grep -qE '^\-\-\- '; then
+  echo "Error: AI output did not look like a unified diff. Not writing patch."
+  echo "$PATCH" | head -50
+  exit 1
+fi
+
+printf "%s\n" "$PATCH" > "$OUTPATCH"
+
+echo "Wrote patch: $OUTPATCH"
+echo
+echo "Preview:"
+git apply --stat "$OUTPATCH" || true
