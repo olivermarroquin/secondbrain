@@ -288,9 +288,22 @@ def main():
             continue
 
         expected = line_index[before_ref]["text"]
+
+        def _norm_match(x: str) -> str:
+            x = (x or "")
+            x = x.replace("\u00a0", " ")  # NBSP -> space
+            x = x.replace("\u2019", "'").replace("’", "'").replace("‘", "'")
+            x = x.replace("“", '"').replace("”", '"')
+            x = x.strip().lower()
+            x = __import__("re").sub(r"\s+", " ", x)
+            x = __import__("re").sub(r"[\s\.,!?;:\)\]\}\"']+$", "", x)
+            return x
+
         if before != expected:
-            drop("before_text_mismatch_for_before_ref")
-            continue
+            if _norm_match(before) != _norm_match(expected):
+                drop("before_text_mismatch_for_before_ref")
+                continue
+            # allow through if only trivial whitespace/quote/trailing punctuation variation
 
         ref_section = line_index[before_ref]["section"]
         if section and section != ref_section:
