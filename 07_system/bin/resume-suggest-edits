@@ -160,17 +160,100 @@ def main():
         die("missing OPENAI_API_KEY (export it in your shell)")
 
     jd_terms = extract_jd_terms(jd_raw)
-    missing_terms = [t for t in jd_terms if t and t.lower() not in resume_all_text]
 
-    proposals = propose_edits_openai(
-        jd_raw=jd_raw,
-        resume_blocks_numbered=resume_blocks_numbered,
-        signals=sig,
-        jd_terms=missing_terms,
-        model=os.environ.get("RF_OPENAI_MODEL", None),
-        max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "12")),
-        timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "60")),
-    )
+    # Run gate: only propose NEW missing JD terms (but always allow cloud terms)
+    out_dir = app / "resume_refs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_p = out_dir / "edit-proposals.json"
+
+    prior_jd_terms = set()
+    if out_p.exists():
+        try:
+            prior_payload = json.loads(out_p.read_text())
+            for pp in (prior_payload.get("proposals") or []):
+                jt = (pp.get("jd_term") or "").strip().lower()
+                if jt:
+                    prior_jd_terms.add(jt)
+        except Exception:
+            prior_jd_terms = set()
+    ALWAYS_ALLOW = {"aws", "azure", "gcp"}
+    missing_terms = [t for t in jd_terms if t and t.lower() not in resume_all_text]
+    run_terms = [t for t in missing_terms if (t.lower() not in prior_jd_terms) or (t.lower() in ALWAYS_ALLOW)]
+
+
+    attempts = 0
+
+
+    all_proposals = []
+
+
+    remaining_terms = list(run_terms)
+
+
+    while attempts < 3 and remaining_terms:
+
+
+        attempts += 1
+
+
+        batch = propose_edits_openai(
+
+
+            jd_raw=jd_raw,
+
+
+            resume_blocks_numbered=resume_blocks_numbered,
+
+
+            signals=sig,
+
+
+            jd_terms=remaining_terms,
+
+
+            model=os.environ.get("RF_OPENAI_MODEL", None),
+
+
+            max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "12")),
+
+
+            timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "60")),
+
+
+        )
+
+
+        all_proposals.extend(batch)
+
+
+        # remove jd_terms already used in this batch so next attempt explores NEW terms
+
+
+        batch_terms = set()
+
+
+        for _p in batch:
+
+
+            _t = (_p.get("jd_term") or "").strip().lower()
+
+
+            if _t:
+
+
+                batch_terms.add(_t)
+
+
+        remaining_terms = [t for t in remaining_terms if t.strip().lower() not in batch_terms]
+
+
+        if len(all_proposals) >= int(os.environ.get("RF_MAX_PROPOSALS", "12")):
+
+
+            break
+
+
+    proposals = all_proposals
 
     # Enforce "before exists verbatim" + section scoping deterministically
     # (Model is instructed, but we verify and drop violations.)
@@ -181,6 +264,7 @@ def main():
     filtered = []
     dropped = 0
     dropped_notes = []
+    used_jd_terms = set()
     for p in proposals:
         before = (p.get("before") or [""])[0]
         section = (p.get("section") or "").strip().upper()
@@ -256,7 +340,12 @@ def main():
             if "selenium" in before_line.lower() and not line_has_ux_cues(before_line):
                 drop("semantic_mismatch_ux_term_in_selenium_line")
                 continue       
-    
+        # Enforce: one unique jd_term per proposal in this run
+        if jd_term and jd_term in used_jd_terms:
+            drop("duplicate_jd_term_in_run")
+            continue
+        if jd_term:
+            used_jd_terms.add(jd_term)
         filtered.append(p)
 
     # Assign deterministic ids (approve step expects stable ids)
@@ -277,6 +366,12 @@ def main():
     print()
 
     print(f"JD TERMS (missing-only gate): {', '.join(missing_terms) if missing_terms else '(none missing)'}")
+    print()
+
+    # Run gate: only feed "missing terms" that we have not already proposed in prior runs.
+    # Source of truth for prior proposals: resume_refs/edit-proposals.json
+    prior_terms_path = app / "resume_refs" / "edit-proposals.json"
+    print(f"JD TERMS (run gate): {', '.join(run_terms) if run_terms else '(none eligible)'}")
     print()
 
     if dropped:
