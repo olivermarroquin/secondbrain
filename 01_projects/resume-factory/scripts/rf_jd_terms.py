@@ -1,193 +1,187 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
-from typing import List, Set, Tuple
+from typing import List
 
-def _norm(s: str) -> str:
-    s = (s or "")
-    s = s.replace("\u2019", "'")
+# -----------------------------------------------------------------------------
+# JD Term Extraction (deterministic, conservative)
+# -----------------------------------------------------------------------------
+
+# Known good short acronyms that are genuinely skills in QA/SDET JDs.
+ALLOW_SHORT = {"api", "qa", "sql", "rest", "soap", "svn"}
+
+# Tokens that are too ambiguous alone; only allow via phrase detection.
+SUPPRESS_IF_SOLO = {"hp", "alm", "vb"}
+
+# Canonical phrases we want to promote if present in the JD (normalized text).
+PHRASES = [
+    ("hp alm", {"hp", "alm"}),
+    ("micro focus alm", {"alm"}),
+    ("vbscript", {"vb"}),
+    ("vb script", {"vb"}),
+]
+
+RE_MONEY = re.compile(r"\$\s*\d+|\b\d+(?:\.\d+)?\s*/\s*hr\b|\b\d+(?:\.\d+)?\s*per\s*hour\b", re.I)
+RE_TIME = re.compile(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", re.I)
+RE_DATEISH = re.compile(r"\b\d{1,2}\s*-\s*\d{1,2}\b")
+RE_NUM_ONLY = re.compile(r"^\d+(?:\.\d+)?$")
+
+# Common benefits/boilerplate words we never want as JD terms
+JUNK_WORDS = {
+    "required", "requirements", "must", "must-have", "musthave", "preferred",
+    "high-quality", "high quality", "short-term", "short term",
+    "benefits", "401k", "pto", "vacation", "insurance", "health", "dental", "vision",
+    "equal", "opportunity", "employer", "eeo", "accommodation",
+    "education", "certification", "certifications", "degree",    "education/certification",
+    "stack-ranked",
+    "stack ranked",
+
+}
+
+# Stopwords / boilerplate tokens we never want as JD terms
+STOPWORDS = {
+    "a","an","and","are","as","at","be","by","can","for","from","has","have","if","in","into",
+    "is","it","job","more","not","of","on","or","our","per","role","that","the","their",
+    "this","to","up","we","will","with","you","your"
+}
+
+# Generic words that are not JD skills/tools (drop even if frequent)
+GENERIC = {
+    "test","testing","team","work","experience","require","required",
+    "requirements","ensure","support","ability","skills"
+}
+
+
+# Allowlist of common QA/SDET skills/tools words that may appear as plain letters
+SKILL_WORDS = {
+    "selenium","playwright","cypress","appium","restassured","postman","jmeter","locust",
+    "jenkins","github","bitbucket","jira","confluence","testng","junit","cucumber",
+    "python","java","typescript","javascript","sql","api","rest","soap","svn","svn",
+    "aws","azure","gcp","docker","kubernetes","ci","cd","cicd","devops",
+    "agile","scrum","kanban","safe","safe",
+    "graphql","restful","microservices",
+    "testrail","alm","hp alm","vbscript"
+}
+
+def _norm_text(s: str) -> str:
+    s = (s or "").lower()
+    s = s.replace("\u00a0", " ")
+    s = s.replace("\u2019", "'").replace("’", "'").replace("‘", "'")
+    s = s.replace("“", '"').replace("”", '"')
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
-def _low(s: str) -> str:
-    return _norm(s).lower()
-
-def _canonical(term: str) -> str:
-    t = _low(term)
-    replacements = {
-        "cicd": "ci/cd",
-        "ci cd": "ci/cd",
-        "rest-assured": "rest assured",
-        "test rail": "testrail",
-        "as a full-stack": "full-stack",
-        "a full-stack": "full-stack",
-    }
-    for k, v in replacements.items():
-        t = t.replace(k, v)
-    return t.strip()
-
-def _is_toolish(token: str) -> bool:
-    if any(ch in token for ch in ["/", ".", "-", "_"]):
-        return True
-    if any(ch.isdigit() for ch in token):
-        return True
-    return False
-
-TRIVIAL_ABBREVIATIONS = {"e.g", "eg", "i.e", "ie"}
-EMPLOYMENT_MARKETING = {"full-time", "contract/temporary", "ai-matched", "ai-powered"}
-LEGAL_HR = {"eeo", "equal opportunity", "disability", "veterans", "m/f/"}
-GENERIC_VERB_FRAGMENTS = {"build/maintain", "establish/enforce", "to succeed"}
-
-# Explicit junk tokens observed in real JDs (keep this list tight and auditable)
-EXPLICIT_JUNK_TERMS = {
-    "education/certification",
-    "stack-ranked",
-    "required -",
-    "required.-",
-    "required. -",
-    "ad",
-    "ai",
-}
-
 def _is_junk(term: str) -> bool:
-    t = term.strip()
+    t = (term or "").strip().lower()
     if not t:
         return True
 
-    # normalize for comparisons
-    tl = t.lower()
-
-    # exact junk terms
-    if tl in EXPLICIT_JUNK_TERMS:
+    if t in JUNK_WORDS or t in STOPWORDS or t in GENERIC:
         return True
 
-    # trivial abbreviations
-    if tl in TRIVIAL_ABBREVIATIONS:
+    if RE_NUM_ONLY.match(t):
+        return True
+    if RE_MONEY.search(t) or RE_TIME.search(t) or RE_DATEISH.search(t):
         return True
 
-    # employment / marketing artifacts
-    if tl in EMPLOYMENT_MARKETING:
+    # too short + not explicitly allowed
+    if len(t) <= 2 and t not in ALLOW_SHORT:
         return True
 
-    # HR / legal boilerplate
-    if any(x in tl for x in LEGAL_HR):
+    # ambiguous solo tokens
+    if t in SUPPRESS_IF_SOLO:
         return True
 
-    # generic verb fragments
-    if any(x in tl for x in GENERIC_VERB_FRAGMENTS):
-        return True
-
-    # years (e.g. 2024)
-    if re.fullmatch(r"20\d{2}", tl):
-        return True
-
-    # money/benefits tokens (401k, etc.)
-    if re.fullmatch(r"\d{3,4}k", tl):
-        return True
-
-    # decimals / rates (53.85, 63.85)
-    if re.fullmatch(r"\d+\.\d+", tl):
-        return True
-
-    # times (8am, 5pm)
-    if re.fullmatch(r"\d{1,2}(am|pm)", tl):
-        return True
-
-    # ranges like 5-7 (years), 1-2, etc.
-    if re.fullmatch(r"\d{1,2}-\d{1,2}", tl):
-        return True
-
-    # pure numbers (30, 12)
-    if re.fullmatch(r"\d+", tl):
-        return True
-
-    # alphanumeric IDs (cxsapwma1)
-    if re.fullmatch(r"[a-z]{3,}\d+[a-z0-9]*", tl):
-        return True
-
-    # formatting artifacts: trailing punctuation/dashes
-    if re.search(r"[.\-]{2,}", tl):
-        return True
-    if re.fullmatch(r".*-\s*$", tl):
-        return True
-
-    # hyphenated adjective junk (high-quality, must-have, short-term)
-    if tl in {"high-quality", "must-have", "short-term"}:
-        return True
-
-    # URLs / domains
-    if any(x in tl for x in ("http", ".com", ".net", ".org")):
-        return True
-
-    # numeric identifiers
-    if re.fullmatch(r"[0-9\-]{6,}", tl):
-        return True
-
-    # overly long / sentence-like fragments
-    if len(tl) > 25:
-        return True
-    if len(tl.split()) > 3:
+    # drop weird ID-like strings
+    if re.fullmatch(r"[a-z0-9_-]{9,}", t) and any(ch.isdigit() for ch in t):
         return True
 
     return False
 
-def extract_jd_terms(jd_raw: str, max_terms: int = 30) -> List[str]:
-    raw = jd_raw or ""
-    txt = _norm(raw)
-    low = txt.lower()
+
+def _looks_like_skill(t: str) -> bool:
+    # Keep known short acronyms
+    if t in ALLOW_SHORT:
+        return True
+    # Keep allowlisted skill words/phrases
+    if t in SKILL_WORDS:
+        return True
+    # Keep things that look like tools/tech (c#, c++, node.js, ci/cd, etc.)
+    if re.search(r"[^a-z]", t):
+        return True
+    return False
+
+def extract_jd_terms(text: str, max_terms: int = 18) -> List[str]:
+    low = _norm_text(text)
+
+    # Promote known phrases first, and suppress their solo components
+    suppress = set()
+    promoted: List[str] = []
+    for phrase, to_suppress in PHRASES:
+        if phrase in low:
+            if phrase == "vb script":
+                if "vbscript" not in promoted:
+                    promoted.append("vbscript")
+            else:
+                if phrase not in promoted:
+                    promoted.append(phrase)
+            suppress |= set(to_suppress)
+
+    # Tokenize for potential tool/skill words
+    raw_tokens = re.findall(r"[a-z0-9][a-z0-9\+#\.\-/]{0,38}", low)
 
     candidates: List[str] = []
+    for tok in raw_tokens:
+        t = tok.strip(" .,-/").lower()
+        if not t:
+            continue
 
-    acronyms = re.findall(r"\b[A-Z]{2,}\b", raw)
-    for a in acronyms:
-        candidates.append(_canonical(a))
+        # Suppress components if we already promoted a phrase
+        if t in suppress:
+            continue
 
-    if "ci/cd" not in candidates and ("CI" in acronyms and "CD" in acronyms):
-        candidates.append("ci/cd")
+        # Allow known short skills, otherwise require length >= 3
+        if len(t) <= 2 and t not in ALLOW_SHORT:
+            continue
 
-    toolish_tokens = re.findall(r"\b[\w\./_-]+[0-9\./_-]*[\w]+[\w\./_-]*\b", txt)
-    for tok in toolish_tokens:
-        tt = _canonical(tok)
-        if len(tt) >= 2 and _is_toolish(tt):
-            candidates.append(tt)
+        # Normalize vb script variants
+        if t in {"vbscript", "vb-script"}:
+            t = "vbscript"
 
-    words = re.findall(r"[a-zA-Z0-9\./_-]+", txt)
-    words_l = [_canonical(w) for w in words if w.strip()]
+        if _is_junk(t):
+            continue
+        if not _looks_like_skill(t):
+            continue
 
-    bigrams = [" ".join(words_l[i:i+2]) for i in range(len(words_l) - 1)]
-    trigrams = [" ".join(words_l[i:i+3]) for i in range(len(words_l) - 2)]
+        candidates.append(t)
 
-    bg_counts = Counter(bigrams)
-    tg_counts = Counter(trigrams)
-
-    for phrase, count in bg_counts.items():
-        if count >= 2 and any(_is_toolish(w) for w in phrase.split()):
-            candidates.append(_canonical(phrase))
-
-    for phrase, count in tg_counts.items():
-        if count >= 2 and any(_is_toolish(w) for w in phrase.split()):
-            candidates.append(_canonical(phrase))
-
+    # Combine: promoted phrases first, then best tokens by frequency
     uniq: List[str] = []
-    seen: Set[str] = set()
+    seen = set()
 
-    for tt in candidates:
-        if not tt or tt in seen:
-            continue
-        if _is_junk(tt):
-            continue
-        seen.add(tt)
-        uniq.append(tt)
+    def add(x: str):
+        x = x.strip().lower()
+        if not x or x in seen:
+            return
+        if _is_junk(x):
+            return
+        seen.add(x)
+        uniq.append(x)
 
-    def score(term: str) -> Tuple[int, int]:
-        freq = low.count(term)
-        bonus = 2 if any(_is_toolish(w) for w in term.split()) else 0
-        return (freq + bonus, len(term))
+    for p in promoted:
+        add(p)
 
-    uniq.sort(key=score, reverse=True)
+    def score(term: str):
+        return (low.count(term), len(term))
+
+    for c in sorted(set(candidates), key=score, reverse=True):
+        add(c)
+
     return uniq[:max_terms]
 
-def rationale_mentions_term(rationale: str, terms: List[str]) -> bool:
-    r = _low(rationale)
-    return any(t in r for t in terms if t)
+def rationale_mentions_term(rationale: str, term: str) -> bool:
+    r = _norm_text(rationale)
+    t = _norm_text(term)
+    if not r or not t:
+        return False
+    return t in r

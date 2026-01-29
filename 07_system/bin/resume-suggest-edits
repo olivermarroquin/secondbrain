@@ -378,6 +378,13 @@ def main():
     for i, p in enumerate(filtered, start=1):
         p["id"] = i
 
+    # Normalize section values from model output to match schema (drop RESUME_ prefix)
+    for _p in (filtered or []):
+        _sec = (_p.get("section") or "").strip().upper()
+        if _sec.startswith("RESUME_"):
+            _sec = _sec[len("RESUME_"):]
+        _p["section"] = _sec
+
     ok, msg = validate_proposals(filtered)
     if not ok:
         die(f"proposal schema failed: {msg}")
