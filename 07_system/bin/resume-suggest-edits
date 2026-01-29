@@ -266,8 +266,21 @@ def main():
     dropped_notes = []
     used_jd_terms = set()
     for p in proposals:
-        before = (p.get("before") or [""])[0]
+        # before may be a string or a list[str] (model output). Normalize deterministically.
+        before_raw = p.get("before")
+        if isinstance(before_raw, list):
+            before = (before_raw[0] if before_raw else "")
+        else:
+            before = (before_raw or "")
+
         section = (p.get("section") or "").strip().upper()
+        # Normalize section aliases the model may emit
+        SECTION_ALIASES = {
+            "RESUME_SKILLS": "SKILLS",
+            "RESUME_EXPERIENCE": "EXPERIENCE",
+            "RESUME_SUMMARY": "SUMMARY",
+        }
+        section = SECTION_ALIASES.get(section, section)
 
         def drop(reason: str):
             nonlocal dropped
