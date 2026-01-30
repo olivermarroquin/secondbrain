@@ -97,6 +97,25 @@ def line_has_sql_cues(line: str) -> bool:
     l = (line or "").lower()
     return any(x in l for x in ["sql", "database", "jdbc", "query"])
 
+def line_has_ci_cues(line: str) -> bool:
+    l = (line or "").lower()
+    return any(x in l for x in [
+        "jenkins", "github actions", "gitlab", "teamcity", "bamboo", "circleci",
+        "ci/cd", "cicd", "continuous integration", "continuous delivery",
+        "pipeline", "build", "deploy", "deployment", "release"
+    ])
+
+def after_has_bad_phrasing(after: str) -> bool:
+    a = (after or "").lower()
+    bad_snippets = [
+        "a design/implementation of",
+        "designed and implemented a design/implementation",
+        "optimizing back-end",
+        "optimize back-end",
+        "into the ui test framework",
+    ]
+    return any(x in a for x in bad_snippets)
+
 def line_has_ux_cues(line: str) -> bool:
     l = (line or "").lower()
     return any(x in l for x in ["ui", "ux", "user experience", "front end", "frontend", "ui/ux"])
@@ -337,15 +356,13 @@ def main():
         jd_term = (p.get("jd_term") or "").strip().lower()
         rationale = (p.get("rationale") or "")
 
-        if jd_terms:
-            # Must select a term we provided
-            if not jd_term or jd_term not in [t.lower() for t in jd_terms]:
-                drop("missing_or_invalid_jd_term")
-                continue
-            # Rationale must explicitly include the chosen term
-            if jd_term not in rationale.lower():
+       
+        if jd_term not in rationale.lower():
+            if not rationale.strip():
                 drop("rationale_missing_jd_term")
                 continue
+            rationale = f"JD mentions {jd_term}; align resume to JD requirement. " + rationale.strip()
+            p["rationale"] = rationale
 
         # Missing-term gate: reject proposals for terms already present in resume
         if jd_term and jd_term in resume_all_text:
@@ -356,18 +373,68 @@ def main():
         cat = term_category(jd_term)
         before_line = line_index.get(before_ref, {}).get("text", "")
 
+        # ---- hard block: never edit resume headings ----
+        bl = (before_line or "").strip()
+        bl_u = bl.upper().rstrip(":").strip()
+
+        HEADING_BLOCK = {
+            "PROFESSIONAL EXPERIENCE",
+            "EXPERIENCE",
+            "TECHNICAL SKILLS",
+            "SKILLS",
+            "PROFESSIONAL SUMMARY",
+            "SUMMARY",
+            "EDUCATION",
+            "CERTIFICATIONS",
+            "PROJECTS",
+        }
+
+        # If it looks like a heading, kill it.
+        if bl.endswith(":") and bl_u in HEADING_BLOCK:
+            drop("target_is_resume_heading")
+            continue
+
+        # ---- hard block: never edit ROLE HEADER lines (job title / company / dates) ----
+        # Examples:
+        # "Sr. Test Automation Engineer  Food and Drug Administration  Jul 2021 -- Present"
+        # These must never be modified.
+        if (
+            re.search(r"\b(19|20)\d{2}\b", bl)
+            and re.search(r"--|present", bl.lower())
+        ):
+            drop("target_is_role_header_line")
+            continue
+
+        if (
+            re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b", bl.lower())
+            and re.search(r"--|present", bl.lower())
+        ):
+            drop("target_is_role_header_line")
+            continue
+
         if cat == "PERF":
             # If the target line is clearly SQL/database-only, don't append perf/load unless perf cues already exist
             if line_has_sql_cues(before_line) and not line_has_perf_cues(before_line):
                 drop("semantic_mismatch_perf_term_in_sql_line")
                 continue
+            # New: don't bolt perf/load onto CI/CD lines unless perf is already present
+            if line_has_ci_cues(before_line) and not line_has_perf_cues(before_line):
+                drop("semantic_mismatch_perf_term_in_ci_line")
+                continue
 
         if cat == "UX":
-            # Allow UI/UX only when the target line already has UI/UX or accessibility cues.
-            # This prevents keyword stuffing into random Selenium lines.
-            if not (line_has_ux_cues(before_line) or any(x in before_line.lower() for x in ["accessibility", "wcag", "axe", "wave", "aria"])):
+             # Allow UI/UX when the target line already has UX or accessibility cues
+             if not (
+                line_has_ux_cues(before_line)
+                or any(
+                    x in before_line.lower()
+                    for x in ["accessibility", "wcag", "axe", "wave", "aria"]
+                )
+            ):
                 drop("semantic_mismatch_ux_term_without_ux_or_accessibility_cues")
-            continue
+                continue
+                # If it passes the cue check, let it proceed to uniqueness + filtered.append    
+
         # ---- FINAL uniqueness gates (do not mutate until both pass) ----
         if jd_term and jd_term in used_jd_terms:
             drop("duplicate_jd_term_in_run")

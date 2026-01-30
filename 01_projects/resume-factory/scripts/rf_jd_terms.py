@@ -25,6 +25,11 @@ RE_MONEY = re.compile(r"\$\s*\d+|\b\d+(?:\.\d+)?\s*/\s*hr\b|\b\d+(?:\.\d+)?\s*pe
 RE_TIME = re.compile(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", re.I)
 RE_DATEISH = re.compile(r"\b\d{1,2}\s*-\s*\d{1,2}\b")
 RE_NUM_ONLY = re.compile(r"^\d+(?:\.\d+)?$")
+RE_URLISH = re.compile(r"(https?://|www\.)", re.I)
+RE_DOMAINISH = re.compile(r"\b[a-z0-9-]+\.(com|net|org|edu|gov)\b", re.I)
+RE_EEO_SLASH = re.compile(r"\b[mf]/f/(?:disability|disabled|veterans?)\b", re.I)
+RE_URL = re.compile(r"\bhttps?://\S+|\bwww\.\S+|\b\S+\.(com|net|org|gov|edu)\b", re.I)
+RE_EEO = re.compile(r"\bm/f\b|\bdisability\b|\bveterans?\b|\beeo\b", re.I)
 
 # Common benefits/boilerplate words we never want as JD terms
 JUNK_WORDS = {
@@ -33,6 +38,7 @@ JUNK_WORDS = {
     "benefits", "401k", "pto", "vacation", "insurance", "health", "dental", "vision",
     "equal", "opportunity", "employer", "eeo", "accommodation",
     "education", "certification", "certifications", "degree",    "education/certification",
+    "hands-on", "contract/temporary", "contract", "temporary", "full-stack",
     "stack-ranked",
     "stack ranked",
 
@@ -83,6 +89,23 @@ def _is_junk(term: str) -> bool:
         return True
     if RE_MONEY.search(t) or RE_TIME.search(t) or RE_DATEISH.search(t):
         return True
+    
+    if RE_URL.search(t):
+        return True
+    if RE_EEO.search(t):
+        return True
+    
+    # URLs/domains / recruiting boilerplate should never be JD terms
+    if RE_URLISH.search(t) or RE_DOMAINISH.search(t):
+        return True
+
+    # EEO boilerplate patterns like m/f/disability/veterans
+    if RE_EEO_SLASH.search(t):
+        return True
+
+    # Extra hard-drop for common EEO/legal tokens
+    if any(x in t for x in ["equal opportunity", "eeo", "accommodation", "veteran", "veterans", "disability", "disabled"]):
+        return True    
 
     # too short + not explicitly allowed
     if len(t) <= 2 and t not in ALLOW_SHORT:

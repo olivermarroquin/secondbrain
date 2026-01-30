@@ -48,11 +48,42 @@ ABSOLUTE RULES:
 YOU MUST ANCHOR EVERY PROPOSAL TO AN EXISTING NUMBERED RESUME LINE:
 - Choose "before_ref" from the numbered RESUME text (e.g., S003, K012, E044).
 - The "before" value MUST be the exact text of that referenced line (copy it exactly, without the "S003 |" prefix).
+- Copy/paste the before line exactly. Do not paraphrase it. If you can’t copy it exactly, skip that line.
+- In the drop notes, print before_ref too so you can quickly spot where it’s failing.
 
 YOU MUST GROUND EVERY PROPOSAL IN THE JD TERMS LIST:
 - Each proposal must include "jd_term" set to EXACTLY one item from JD_TERMS.
 - The rationale must begin exactly:
   "JD mentions <jd_term>; align resume to JD requirement."
+
+COLLISION RULE (IMPORTANT):
+- Do NOT output more than one proposal with the same before_ref.
+- Do NOT output more than one proposal for the same before_ref.
+- If you need to address multiple JD_TERMS on the same resume line, combine them into a single updated after[0] for that before_ref.
+- If multiple JD_TERMS apply to the same resume line, combine them into ONE updated after[0] for that before_ref.
+
+QUALITY RULES (MANDATORY):
+- Do NOT append vague meta phrases like "reinforcing", "addressing", "essential for", "best practices", "within the lifecycle".
+- Every edit must add concrete, test-relevant content: a method, artifact, tool, or measurable action.
+- If you cannot add concrete content without changing meaning, SKIP that line and choose a different before_ref.
+
+TERM-SPECIFIC RULES:
+- For risks/dependencies: mention risk-based testing, dependency mapping, release blockers, or documenting risks in test plans (not just the words "risks/dependencies").
+- For performance/load/stress: mention JMeter/k6/Gatling OR "load/stress" explicitly in a technically natural way (not "workflows").
+- For design/implementation: reference framework design, architecture, POM, utilities, or implementation of automation components (not "best practices").
+
+UI/UX TARGETING RULE:
+- If jd_term is "ui/ux", you MUST anchor to a line that already mentions UI, UX, accessibility, WCAG, Axe, WAVE, ARIA, frontend, or user experience.
+- If no such line exists, do NOT propose a change for ui/ux.
+
+LINE MERGE RULE (CRITICAL):
+- You may propose AT MOST ONE change per resume line (before_ref).
+- If multiple JD terms apply to the same line, you MUST combine them into a single AFTER rewrite.
+- Do NOT create multiple proposals that target the same before_ref.
+- When combining multiple JD terms into a single edit, prefer REPLACE_LINE over REPLACE_PHRASE.
+EXAMPLE:
+If a line already covers regression testing and the JD adds "performance/load" and "risks/dependencies",
+combine them into ONE sentence that naturally incorporates both.
 
 JSON SHAPE:
 {{
@@ -74,6 +105,8 @@ CONSTRAINTS:
 - Prefer REPLACE_PHRASE unless the entire line needs replacement.
 - Keep meaning close to the original line (minimal semantic drift).
 - Avoid generic style edits (clarity/impact/assertiveness). Every change must be JD alignment.
+- Do not introduce filler like proactively, actively, hands-on, involved. Only add concrete technical content.
+- If a JD term is not a tool/technology, do not force it into EXPERIENCE. Prefer SKILLS or skip.
 """
 
     user_prompt = f"""
