@@ -83,7 +83,7 @@ def term_category(term: str) -> str:
     t = (term or "").lower()
     if any(x in t for x in ["performance/load", "performance/load/stress", "load/stress", "load testing", "stress testing"]):
         return "PERF"
-    if any(x in t for x in ["ui/ux", "ux"]):
+    if "ui/ux" in t or t == "ux" or t.endswith("/ux") or t.startswith("ux"):
         return "UX"
     if "sql" in t:
         return "SQL"
@@ -265,6 +265,7 @@ def main():
     dropped = 0
     dropped_notes = []
     used_jd_terms = set()
+    used_before_refs = set()   
     for p in proposals:
         # before may be a string or a list[str] (model output). Normalize deterministically.
         before_raw = p.get("before")
@@ -362,18 +363,28 @@ def main():
                 continue
 
         if cat == "UX":
-            # Avoid recruiter-weird phrasing like "UI/UX Selenium infrastructure" unless the line already signals UI/UX
-            if "selenium" in before_line.lower() and not line_has_ux_cues(before_line):
-                drop("semantic_mismatch_ux_term_in_selenium_line")
-                continue       
-        # Enforce: one unique jd_term per proposal in this run
+            # Allow UI/UX only when the target line already has UI/UX or accessibility cues.
+            # This prevents keyword stuffing into random Selenium lines.
+            if not (line_has_ux_cues(before_line) or any(x in before_line.lower() for x in ["accessibility", "wcag", "axe", "wave", "aria"])):
+                drop("semantic_mismatch_ux_term_without_ux_or_accessibility_cues")
+            continue
+        # ---- FINAL uniqueness gates (do not mutate until both pass) ----
         if jd_term and jd_term in used_jd_terms:
             drop("duplicate_jd_term_in_run")
             continue
+
+        if before_ref in used_before_refs:
+            drop("duplicate_before_ref_in_run")
+            continue
+
+        # Commit uniqueness only after both pass
         if jd_term:
             used_jd_terms.add(jd_term)
-        filtered.append(p)
+        used_before_refs.add(before_ref)
 
+        filtered.append(p)
+      
+ 
     # Assign deterministic ids (approve step expects stable ids)
     for i, p in enumerate(filtered, start=1):
         p["id"] = i
