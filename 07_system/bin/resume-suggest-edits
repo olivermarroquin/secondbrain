@@ -127,6 +127,11 @@ def main():
     ap.add_argument("--diff", action="store_true", help="Show BEFORE/AFTER diffs (recommended)")
     ap.add_argument("--family", default="qa_automation_engineer")
     ap.add_argument("--no-write", action="store_true", help="Do not write edit-proposals.json")
+    ap.add_argument(
+    "--fresh",
+    action="store_true",
+    help="Ignore prior edit-proposals.json term history and regenerate suggestions",
+    )
     args = ap.parse_args()
 
     app = Path(args.app).expanduser()
@@ -186,7 +191,7 @@ def main():
     out_p = out_dir / "edit-proposals.json"
 
     prior_jd_terms = set()
-    if out_p.exists():
+    if (not args.fresh) and out_p.exists():
         try:
             prior_payload = json.loads(out_p.read_text())
             for pp in (prior_payload.get("proposals") or []):
@@ -199,9 +204,10 @@ def main():
     missing_terms = [t for t in jd_terms if t and t.lower() not in resume_all_text]
     run_terms = [t for t in missing_terms if (t.lower() not in prior_jd_terms) or (t.lower() in ALWAYS_ALLOW)]
 
+    if args.fresh:
+        print("RUN MODE: fresh (ignoring prior edit-proposals.json)")
 
     attempts = 0
-
 
     all_proposals = []
 
