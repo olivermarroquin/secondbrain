@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   sz-new NNN lang slug [kind]
+# Examples:
+#   sz-new 003 java merge_two_sorted_lists linkedlist
+#   sz-new 010 java two_sum arrays
+#   sz-new 010 sql user_orders
+#
+# Creates:
+# - problems/NNN_slug.md from template (if exists)
+# - solution stub in lang folder (kind-aware for java)
+# - updates notes/ACTIVE.md and notes/INDEX.md
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+if [[ $# -lt 3 ]]; then
+  echo "usage: sz-new NNN lang slug [kind]"
+  exit 2
+fi
+
+NNN="$(printf "%03d" "$1" 2>/dev/null || true)"
+LANG="$2"
+SLUG="$3"
+KIND="${4:-arrays}"   # default
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${ROOT}" ]] || { echo "error: not inside a git repo"; exit 2; }
+
+STUDY="$ROOT/01_projects/study_zone"
+[[ -d "$STUDY" ]] || { echo "error: study_zone not found at $STUDY"; exit 2; }
+
+mkdir -p "$STUDY"/{notes,problems,reviews,drills,java,python,sql,playwright}
+
+PROBLEM="problems/${NNN}_${SLUG}.md"
+REVIEW="reviews/${NNN}_${SLUG}_review.md"
+
+case "$LANG" in
+  java)       SOLUTION="java/${NNN}_${SLUG}.java" ;;
+  python)     SOLUTION="python/${NNN}_${SLUG}.py" ;;
+  sql)        SOLUTION="sql/${NNN}_${SLUG}.sql" ;;
+  playwright) SOLUTION="playwright/${NNN}_${SLUG}.spec.ts" ;;
+  *) echo "error: lang must be one of: java|python|sql|playwright"; exit 2 ;;
+esac
+
+cd "$STUDY"
+
+# Create problem from template if missing
+TEMPLATE="problems/${LANG}_problem_template.md"
+if [[ -f "$TEMPLATE" && ! -f "$PROBLEM" ]]; then
+  cp "$TEMPLATE" "$PROBLEM"
+elif [[ ! -f "$PROBLEM" ]]; then
+  cat > "$PROBLEM" <<EOF2
+# ${NNN} ${SLUG}
+
+Category:
+- ${LANG}
+
+Prompt:
+[TBD]
+
+Constraints:
+- Time limit:
+- Allowed tools:
+
+Notes:
+EOF2
+fi
+
+# Java stub generator (kind-aware)
+java_stub_arrays() {
+  cat <<EOF2
+import java.util.*;
+
+class C${NNN}_$(echo "$SLUG" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2)}; print $0}' OFS='') {
+
+    static int[] solve(int[] nums, int target) {
+        // TODO
+        return new int[]{};
+    }
+
+    public static void main(String[] args) {
+        // TODO: add quick sanity tests
+    }
+}
+EOF2
+}
+
+java_stub_linkedlist() {
+  cat <<EOF2
+import java.util.*;
+
+class C${NNN}_$(echo "$SLUG" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2)}; print $0}' OFS='') {
+
+    static class ListNode {
+        int val;
+        ListNode next;
+        ListNode() {}
+        ListNode(int val) { this.val = val; }
+        ListNode(int val, ListNode next) { this.val = val; this.next = next; }
+    }
+
+    static ListNode solve(ListNode list1, ListNode list2) {
+        // TODO
+        return null;
+    }
+
+    static ListNode fromArray(int[] arr) {
+        ListNode dummy = new ListNode(0);
+        ListNode cur = dummy;
+        for (int v : arr) {
+            cur.next = new ListNode(v);
+            cur = cur.next;
+        }
+        return dummy.next;
+    }
+
+    static int[] toArray(ListNode head) {
+        List<Integer> out = new ArrayList<>();
+        while (head != null) {
+            out.add(head.val);
+            head = head.next;
+        }
+        int[] res = new int[out.size()];
+        for (int i = 0; i < out.size(); i++) res[i] = out.get(i);
+        return res;
+    }
+
+    public static void main(String[] args) {
+        // TODO: add quick sanity tests
+    }
+}
+EOF2
+}
+
+# Create solution stub if missing
+if [[ ! -f "$SOLUTION" ]]; then
+  case "$LANG" in
+    java)
+      case "$KIND" in
+        arrays|string|basic) java_stub_arrays > "$SOLUTION" ;;
+        linkedlist)          java_stub_linkedlist > "$SOLUTION" ;;
+        *) echo "warn: unknown java kind '$KIND' -> using arrays stub" >&2; java_stub_arrays > "$SOLUTION" ;;
+      esac
+      ;;
+    python)
+      cat > "$SOLUTION" <<'EOF2'
+def solve():
+    # TODO
+    pass
+
+if __name__ == "__main__":
+    solve()
+EOF2
+      ;;
+    sql)
+      cat > "$SOLUTION" <<'EOF2'
+-- TODO: write query here
+EOF2
+      ;;
+    playwright)
+      cat > "$SOLUTION" <<'EOF2'
+import { test, expect } from "@playwright/test";
+
+test("TODO", async ({ page }) => {
+  // TODO
+});
+EOF2
+      ;;
+  esac
+fi
+
+# Update ACTIVE
+cat > notes/ACTIVE.md <<EOF2
+# Active Drill
+
+number: $NNN
+lang: $LANG
+problem_file: $PROBLEM
+solution_file: $SOLUTION
+review_file: $REVIEW
+status: new
+notes:
+EOF2
+
+# Ensure INDEX exists
+if [[ ! -f notes/INDEX.md ]]; then
+  cat > notes/INDEX.md <<'EOF2'
+# Study Zone Index (source of truth)
+
+Format:
+- NNN | lang | problem_file | solution_file | review_file | status
+
+Status values:
+- new | attempted | solved | reviewed | done
+EOF2
+fi
+
+ROW="$NNN | $LANG | $PROBLEM | $SOLUTION | $REVIEW | new"
+if need_cmd rg; then
+  FOUND="$(rg "^$NNN \\| $LANG \\|" notes/INDEX.md || true)"
+else
+  FOUND="$(grep -E "^$NNN \\| $LANG \\|" notes/INDEX.md || true)"
+fi
+
+if [[ -z "$FOUND" ]]; then
+  echo "$ROW" >> notes/INDEX.md
+else
+  sed -i '' "s#^$NNN | $LANG | .*#$ROW#g" notes/INDEX.md
+fi
+
+echo "Created/updated:"
+echo "  $PROBLEM"
+echo "  $SOLUTION"
+echo "  notes/ACTIVE.md"
+echo "  notes/INDEX.md"

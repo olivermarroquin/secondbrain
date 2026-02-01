@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   sz-set NNN lang slug
+# Example:
+#   sz-set 004 java two_sum
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: sz-set NNN lang slug"
+  exit 2
+fi
+
+NNN="$(printf "%03d" "$1" 2>/dev/null || true)"
+LANG="$2"
+SLUG="$3"
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${ROOT}" ]]; then
+  echo "error: not inside a git repo"
+  exit 2
+fi
+
+STUDY="$ROOT/01_projects/study_zone"
+if [[ ! -d "$STUDY" ]]; then
+  echo "error: study_zone not found at $STUDY"
+  exit 2
+fi
+
+PROBLEM="problems/${NNN}_${SLUG}.md"
+SOLUTION="${LANG}/${NNN}_${SLUG}"
+REVIEW="reviews/${NNN}_${SLUG}_review.md"
+
+case "$LANG" in
+  java)       SOLUTION="${SOLUTION}.java" ;;
+  python)     SOLUTION="${SOLUTION}.py" ;;
+  sql)        SOLUTION="${SOLUTION}.sql" ;;
+  playwright) SOLUTION="${SOLUTION}.spec.ts" ;;
+  *) echo "error: lang must be one of: java|python|sql|playwright"; exit 2 ;;
+esac
+
+mkdir -p "$STUDY/notes" "$STUDY/problems" "$STUDY/$LANG" "$STUDY/reviews"
+
+# Write ACTIVE.md deterministically
+cat > "$STUDY/notes/ACTIVE.md" <<EOF2
+# Active Drill
+
+number: $NNN
+lang: $LANG
+problem_file: $PROBLEM
+solution_file: $SOLUTION
+review_file: $REVIEW
+status: new
+notes:
+EOF2
+
+# Ensure INDEX.md exists
+if [[ ! -f "$STUDY/notes/INDEX.md" ]]; then
+  cat > "$STUDY/notes/INDEX.md" <<'EOF3'
+# Study Zone Index (source of truth)
+
+Format:
+- NNN | lang | problem_file | solution_file | review_file | status
+
+Status values:
+- new | attempted | solved | reviewed | done
+EOF3
+fi
+
+# Append row if not already present for this NNN+lang
+ROW="$NNN | $LANG | $PROBLEM | $SOLUTION | $REVIEW | new"
+if ! rg -q "^$NNN \\| $LANG \\|" "$STUDY/notes/INDEX.md" 2>/dev/null; then
+  echo "$ROW" >> "$STUDY/notes/INDEX.md"
+else
+  # update existing line for NNN+lang to new row
+  # macOS sed needs -i '' for in-place
+  sed -i '' "s#^$NNN | $LANG | .*#$ROW#g" "$STUDY/notes/INDEX.md"
+fi
+
+echo "ACTIVE set:"
+echo "  $ROW"

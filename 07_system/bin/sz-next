@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   sz-next slug [kind]
+# Example:
+#   sz-next joins_groupby
+#   sz-next merge_two_sorted_lists linkedlist
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${ROOT}" ]] || { echo "error: not inside a git repo"; exit 2; }
+
+STUDY="$ROOT/01_projects/study_zone"
+INDEX="$STUDY/notes/INDEX.md"
+[[ -f "$INDEX" ]] || { echo "error: $INDEX not found"; exit 2; }
+
+SLUG="${1:-}"
+KIND="${2:-arrays}"
+[[ -n "$SLUG" ]] || { echo "usage: sz-next slug [kind]"; exit 2; }
+
+# Determine next NNN by scanning INDEX lines that start with 3 digits
+LAST="$(grep -E '^[0-9]{3} \|' "$INDEX" | tail -n 1 | awk '{print $1}' || true)"
+if [[ -z "$LAST" ]]; then
+  NEXT=1
+else
+  NEXT=$((10#$LAST + 1))
+fi
+NNN="$(printf "%03d" "$NEXT")"
+
+# Rotate language based on NEXT number: 1=java,2=sql,3=playwright,4=python
+MOD=$((NEXT % 4))
+case "$MOD" in
+  1) LANG="java" ;;
+  2) LANG="sql" ;;
+  3) LANG="playwright" ;;
+  0) LANG="python" ;;
+esac
+
+echo "Next session: $NNN $LANG $SLUG"
+exec sz-new "$NNN" "$LANG" "$SLUG" "$KIND"

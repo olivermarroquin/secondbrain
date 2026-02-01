@@ -1,0 +1,20 @@
+Read:
+- problems/001_two_sum.md
+- java/_001_TwoSum.java
+
+Create/overwrite:
+- reviews/001_two_sum_review.md
+
+Use sections:
+Reviewed File:
+What Works:
+Issues:
+Improvements:
+Concepts to Review:
+Next Action:
+
+Rules:
+- Be concise and actionable.
+- Refer to the actual code and problem.
+- Do not invent tests that are not present.
+- Briefly list files changed.

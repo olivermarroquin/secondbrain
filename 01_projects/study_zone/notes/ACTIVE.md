@@ -1,9 +1,9 @@
 # Active Drill
 
-number: 001
-lang: java
-problem_file: problems/001_two_sum.md
-solution_file: java/_001_TwoSum.java
-review_file: reviews/001_two_sum_review.md
-status: reviewed
+number: 006
+lang: sql
+problem_file: problems/006_sql_joins_basics.md
+solution_file: sql/006_sql_joins_basics.sql
+review_file: reviews/006_sql_joins_basics_review.md
+status: new
 notes:

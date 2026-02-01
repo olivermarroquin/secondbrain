@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${ROOT}" ]] || { echo "error: not inside a git repo"; exit 2; }
+
+STUDY="$ROOT/01_projects/study_zone"
+ACTIVE="$STUDY/notes/ACTIVE.md"
+INDEX="$STUDY/notes/INDEX.md"
+NEXTFILE="$STUDY/notes/CODEX_NEXT.txt"
+
+[[ -f "$ACTIVE" ]] || { echo "error: $ACTIVE not found. Run sz-set or sz-new first."; exit 2; }
+
+get_field() {
+  local key="$1"
+  if need_cmd rg; then
+    rg "^${key}:" "$ACTIVE" | sed "s/^${key}: //"
+  else
+    grep -E "^${key}:" "$ACTIVE" | sed "s/^${key}: //"
+  fi
+}
+
+# Optional: sz-review NNN lang (loads matching row into ACTIVE)
+if [[ $# -eq 2 ]]; then
+  NNN="$(printf "%03d" "$1" 2>/dev/null || true)"
+  LANG="$2"
+  [[ -f "$INDEX" ]] || { echo "error: $INDEX not found"; exit 2; }
+
+  if need_cmd rg; then
+    LINE="$(rg "^$NNN \\| $LANG \\|" "$INDEX" || true)"
+  else
+    LINE="$(grep -E "^$NNN \\| $LANG \\|" "$INDEX" || true)"
+  fi
+  [[ -n "$LINE" ]] || { echo "error: no entry for $NNN | $LANG in INDEX.md"; exit 2; }
+
+  PROBLEM="$(echo "$LINE" | awk -F'\\| ' '{print $3}' | sed 's/ *$//')"
+  SOLUTION="$(echo "$LINE" | awk -F'\\| ' '{print $4}' | sed 's/ *$//')"
+  REVIEW="$(echo "$LINE" | awk -F'\\| ' '{print $5}' | sed 's/ *$//')"
+
+  sed -i '' "s#^number:.*#number: $NNN#g" "$ACTIVE"
+  sed -i '' "s#^lang:.*#lang: $LANG#g" "$ACTIVE"
+  sed -i '' "s#^problem_file:.*#problem_file: $PROBLEM#g" "$ACTIVE"
+  sed -i '' "s#^solution_file:.*#solution_file: $SOLUTION#g" "$ACTIVE"
+  sed -i '' "s#^review_file:.*#review_file: $REVIEW#g" "$ACTIVE"
+fi
+
+PROBLEM="$(get_field problem_file)"
+SOLUTION="$(get_field solution_file)"
+REVIEW="$(get_field review_file)"
+
+[[ -n "$PROBLEM" && -n "$SOLUTION" && -n "$REVIEW" ]] || { echo "error: ACTIVE.md missing fields"; exit 2; }
+
+need_cmd codex || { echo "error: codex not found on PATH"; exit 2; }
+
+cd "$STUDY"
+
+cat > "$NEXTFILE" <<EOF2
+Read:
+- $PROBLEM
+- $SOLUTION
+
+Create/overwrite:
+- $REVIEW
+
+Use sections:
+Reviewed File:
+What Works:
+Issues:
+Improvements:
+Concepts to Review:
+Next Action:
+
+Rules:
+- Be concise and actionable.
+- Refer to the actual code and problem.
+- Do not invent tests that are not present.
+- Briefly list files changed.
+EOF2
+
+echo "Wrote: notes/CODEX_NEXT.txt"
+echo "Launching Codex. In Codex, type: @notes/CODEX_NEXT.txt"
+echo
+
+codex
