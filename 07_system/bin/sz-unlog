@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TARGET="${1:-}"
+if [[ -z "$TARGET" ]]; then
+  echo "usage: sz-unlog <lang>"
+  echo "example: sz-unlog pwts"
+  exit 2
+fi
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$ROOT" ]] || { echo "error: not in a git repo"; exit 2; }
+
+FILE="$ROOT/01_projects/study_zone/notes/session_notes/${TARGET}.md"
+[[ -f "$FILE" ]] || { echo "error: file not found: $FILE"; exit 2; }
+
+BAK="$FILE.bak"
+cp "$FILE" "$BAK"
+
+python3 - "$FILE" <<'PY'
+import sys, re
+
+path = sys.argv[1]
+txt = open(path, "r", encoding="utf-8").read()
+
+# Prefer removing last "## ..." block if present.
+hdrs = list(re.finditer(r'(?m)^\s*##\s+.+\s*$', txt))
+if hdrs:
+    start = hdrs[-1].start()
+    new = txt[:start].rstrip() + "\n"
+    open(path, "w", encoding="utf-8").write(new)
+    print("Removed last ## block.")
+    sys.exit(0)
+
+# Fallback: remove last "entry chunk" separated by blank lines.
+# Normalize trailing whitespace
+s = txt.rstrip()
+if not s:
+    print("File is already empty.")
+    sys.exit(0)
+
+# Split on 2+ newlines (chunk separator)
+chunks = re.split(r'\n{2,}', s)
+if len(chunks) <= 1:
+    # Only one chunk -> clear file
+    open(path, "w", encoding="utf-8").write("")
+    print("Cleared file (single chunk).")
+    sys.exit(0)
+
+# Remove last chunk and re-join with double newline
+new = "\n\n".join(chunks[:-1]).rstrip() + "\n"
+open(path, "w", encoding="utf-8").write(new)
+print("Removed last chunk.")
+PY
+
+echo "Updated: $FILE"
+rm -f "$BAK"
