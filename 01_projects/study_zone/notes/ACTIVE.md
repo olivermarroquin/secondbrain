@@ -1,9 +1,9 @@
 # Active Drill
 
-number: 006
-lang: sql
-problem_file: problems/006_sql_joins_basics.md
-solution_file: sql/006_sql_joins_basics.sql
-review_file: reviews/006_sql_joins_basics_review.md
+number: 020
+lang: pwts
+problem_file: problems/020_pwts_stub_test.md
+solution_file: playwright-ts/tests/020_pwts_stub_test.spec.ts
+review_file: reviews/020_pwts_stub_test_review.md
 status: new
 notes:
