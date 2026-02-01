@@ -20,7 +20,21 @@ if [[ $# -lt 3 ]]; then
   exit 2
 fi
 
-NNN="$(printf "%03d" "$1" 2>/dev/null || true)"
+RAW_N="$1"
+if [[ ! "$RAW_N" =~ ^[0-9]+$ ]]; then
+  echo "error: NNN must be a number (got: $RAW_N)" >&2
+  exit 2
+fi
+
+# Force base-10 (avoid octal when input has leading zeros like 021)
+N_DEC=$((10#$RAW_N))
+
+if (( N_DEC < 1 || N_DEC > 999 )); then
+  echo "error: NNN must be in range 1..999 (got: $RAW_N)" >&2
+  exit 2
+fi
+
+NNN="$(printf "%03d" "$N_DEC")"
 LANG="$2"
 SLUG="$3"
 KIND="${4:-arrays}"   # default
@@ -31,7 +45,7 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 STUDY="$ROOT/01_projects/study_zone"
 [[ -d "$STUDY" ]] || { echo "error: study_zone not found at $STUDY"; exit 2; }
 
-mkdir -p "$STUDY"/{notes,problems,reviews,drills,java,python,sql,playwright,playwright-ts,playwright-python,playwright-java,selenium-java,api-java}
+mkdir -p "$STUDY"/{notes,problems,reviews,drills,java,python,sql,web,playwright,playwright-ts,playwright-python,playwright-java,selenium-java,api-java}
 mkdir -p "$STUDY"/playwright-ts/tests
 mkdir -p "$STUDY"/playwright-python/tests
 mkdir -p "$STUDY"/playwright-java/src/test/java
@@ -45,7 +59,7 @@ case "$LANG" in
   java)       SOLUTION="java/${NNN}_${SLUG}.java" ;;
   python)     SOLUTION="python/${NNN}_${SLUG}.py" ;;
   sql)        SOLUTION="sql/${NNN}_${SLUG}.sql" ;;
-
+  web)        SOLUTION="web/${NNN}_${SLUG}/index.html" ;;
   # Playwright variants
   pwts)       SOLUTION="playwright-ts/tests/${NNN}_${SLUG}.spec.ts" ;;
   pwpy)       SOLUTION="playwright-python/tests/test_${NNN}_${SLUG}.py" ;;
@@ -58,7 +72,7 @@ case "$LANG" in
   # (keep legacy if you still want it)
   playwright) SOLUTION="playwright/${NNN}_${SLUG}.spec.ts" ;;
 
-  *) echo "error: lang must be one of: java|python|sql|playwright|pwts|pwpy|pwjava|selenium|api"; exit 2 ;;
+  *) echo "error: lang must be one of: java|python|sql|web|playwright|pwts|pwpy|pwjava|selenium|api"; exit 2 ;;
 esac
 
 cd "$STUDY"
@@ -151,9 +165,42 @@ class C${NNN}_$(echo "$SLUG" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr
 EOF2
 }
 
+
+web_stub_bundle() {
+  local dir="$1"
+  mkdir -p "$dir"
+  [[ -f "$dir/index.html" ]] || cat > "$dir/index.html" <<'EOF'
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TODO</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- TODO: implement per problem -->
+  <main id="app"></main>
+  <script src="script.js"></script>
+</body>
+</html>
+EOF
+  [[ -f "$dir/styles.css" ]] || cat > "$dir/styles.css" <<'EOF'
+/* TODO: implement per problem */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+EOF
+  [[ -f "$dir/script.js" ]] || cat > "$dir/script.js" <<'EOF'
+// TODO: implement per problem
+EOF
+}
+
 # Create solution stub if missing
 if [[ ! -f "$SOLUTION" ]]; then
   case "$LANG" in
+    web)
+      web_stub_bundle "$(dirname "$SOLUTION")"
+      ;;
     java)
       case "$KIND" in
         arrays|string|basic) java_stub_arrays > "$SOLUTION" ;;

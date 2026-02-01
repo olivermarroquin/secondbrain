@@ -11,8 +11,9 @@ Status values:
 005 | java | problems/005_test_unknown_kind.md | java/005_test_unknown_kind.java | reviews/005_test_unknown_kind_review.md | new
 006 | sql | problems/006_sql_joins_basics.md | sql/006_sql_joins_basics.sql | reviews/006_sql_joins_basics_review.md | new
 007 | sql | problems/007_second_highest_salary.md | sql/007_second_highest_salary.sql | reviews/007_second_highest_salary_review.md | new
-016 | selenium | problems/016_selenium_stub_test.md | selenium-java/src/test/java/C016_SeleniumStubTestTest.java | reviews/016_selenium_stub_test_review.md | new
-017 | api | problems/017_api_stub_test.md | api-java/src/test/java/C017_ApiStubTestTest.java | reviews/017_api_stub_test_review.md | new
-018 | pwjava | problems/018_pwjava_stub_test.md | playwright-java/src/test/java/C018_PwjavaStubTest.java | reviews/018_pwjava_stub_test_review.md | new
-019 | pwpy | problems/019_pwpy_stub_test.md | playwright-python/tests/test_019_pwpy_stub_test.py | reviews/019_pwpy_stub_test_review.md | new
-020 | pwts | problems/020_pwts_stub_test.md | playwright-ts/tests/020_pwts_stub_test.spec.ts | reviews/020_pwts_stub_test_review.md | new
+016 | selenium | drills/infra/016_selenium_smoke.md | selenium-java/src/test/java/C016_SeleniumStubTestTest.java | reviews/016_selenium_stub_test_review.md | new
+017 | api | drills/infra/017_api_smoke.md | api-java/src/test/java/C017_ApiStubTestTest.java | reviews/017_api_stub_test_review.md | new
+018 | pwjava | drills/infra/018_pwjava_smoke.md | playwright-java/src/test/java/C018_PwjavaStubTest.java | reviews/018_pwjava_stub_test_review.md | new
+019 | pwpy | drills/infra/019_pwpy_smoke.md | playwright-python/tests/test_019_pwpy_stub_test.py | reviews/019_pwpy_stub_test_review.md | new
+020 | pwts | drills/infra/020_pwts_smoke.md | playwright-ts/tests/020_pwts_stub_test.spec.ts | reviews/020_pwts_stub_test_review.md | new
+021 | web | problems/021_flexbox_card_layout_2.md | web/021_flexbox_card_layout_2/index.html | reviews/021_flexbox_card_layout_2_review.md | new

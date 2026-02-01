@@ -1,9 +1,9 @@
 # Active Drill
 
-number: 020
-lang: pwts
-problem_file: problems/020_pwts_stub_test.md
-solution_file: playwright-ts/tests/020_pwts_stub_test.spec.ts
-review_file: reviews/020_pwts_stub_test_review.md
+number: 021
+lang: web
+problem_file: problems/021_flexbox_card_layout_2.md
+solution_file: web/021_flexbox_card_layout_2/index.html
+review_file: reviews/021_flexbox_card_layout_2_review.md
 status: new
 notes:

@@ -36,7 +36,7 @@ case "$LANG" in
   python)     SOLUTION="${SOLUTION}.py" ;;
   sql)        SOLUTION="${SOLUTION}.sql" ;;
   playwright) SOLUTION="${SOLUTION}.spec.ts" ;;
-  *) echo "error: lang must be one of: java|python|sql|playwright"; exit 2 ;;
+  *) echo "error: lang must be one of: java|python|sql|playwright|pwts|pwpy|pwjava|selenium|api|web|pwts|pwpy|pwjava|selenium|api|web"; exit 2 ;;
 esac
 
 mkdir -p "$STUDY/notes" "$STUDY/problems" "$STUDY/$LANG" "$STUDY/reviews"
