@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$ROOT" ]] || { echo "error: not in a git repo"; exit 2; }
+
+STUDY="$ROOT/01_projects/study_zone"
+ACTIVE="$STUDY/notes/ACTIVE.md"
+[[ -f "$ACTIVE" ]] || { echo "error: missing $ACTIVE"; exit 2; }
+
+PROB_REL="$(sed -n 's/^problem_file: //p' "$ACTIVE" | head -n1)"
+SOL_REL="$(sed -n 's/^solution_file: //p' "$ACTIVE" | head -n1)"
+LANG="$(sed -n 's/^lang: //p' "$ACTIVE" | head -n1)"
+
+[[ -n "$PROB_REL" ]] || { echo "error: problem_file empty"; exit 2; }
+[[ -n "$SOL_REL"  ]] || { echo "error: solution_file empty"; exit 2; }
+
+PROB="$STUDY/$PROB_REL"
+SOL="$STUDY/$SOL_REL"
+
+files=()
+
+if [[ -f "$PROB" ]]; then
+  files+=("$PROB")
+else
+  echo "warn: missing problem file: $PROB" >&2
+fi
+
+if [[ -f "$SOL" ]]; then
+  files+=("$SOL")
+else
+  echo "warn: missing solution file: $SOL" >&2
+fi
+
+# If web bundle, also open sibling files (best-effort)
+if [[ "$LANG" == "web" ]]; then
+  dir="$(dirname "$SOL")"
+  [[ -f "$dir/styles.css" ]] && files+=("$dir/styles.css")
+  [[ -f "$dir/script.js"  ]] && files+=("$dir/script.js")
+fi
+
+if [[ ${#files[@]} -eq 0 ]]; then
+  echo "error: nothing to open" >&2
+  exit 2
+fi
+
+echo "Opening in VS Code:"
+printf '  - %s\n' "${files[@]}"
+
+# Use VS Code CLI if available
+if command -v code >/dev/null 2>&1; then
+  code --reuse-window "${files[@]}"
+else
+  echo "error: 'code' not found in PATH. In VS Code: Command Palette -> 'Shell Command: Install code command in PATH'." >&2
+  exit 2
+fi
