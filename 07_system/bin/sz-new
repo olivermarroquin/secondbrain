@@ -31,7 +31,12 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 STUDY="$ROOT/01_projects/study_zone"
 [[ -d "$STUDY" ]] || { echo "error: study_zone not found at $STUDY"; exit 2; }
 
-mkdir -p "$STUDY"/{notes,problems,reviews,drills,java,python,sql,playwright}
+mkdir -p "$STUDY"/{notes,problems,reviews,drills,java,python,sql,playwright,playwright-ts,playwright-python,playwright-java,selenium-java,api-java}
+mkdir -p "$STUDY"/playwright-ts/tests
+mkdir -p "$STUDY"/playwright-python/tests
+mkdir -p "$STUDY"/playwright-java/src/test/java
+mkdir -p "$STUDY"/selenium-java/src/test/java
+mkdir -p "$STUDY"/api-java/src/test/java
 
 PROBLEM="problems/${NNN}_${SLUG}.md"
 REVIEW="reviews/${NNN}_${SLUG}_review.md"
@@ -40,8 +45,20 @@ case "$LANG" in
   java)       SOLUTION="java/${NNN}_${SLUG}.java" ;;
   python)     SOLUTION="python/${NNN}_${SLUG}.py" ;;
   sql)        SOLUTION="sql/${NNN}_${SLUG}.sql" ;;
+
+  # Playwright variants
+  pwts)       SOLUTION="playwright-ts/tests/${NNN}_${SLUG}.spec.ts" ;;
+  pwpy)       SOLUTION="playwright-python/tests/test_${NNN}_${SLUG}.py" ;;
+  pwjava)     SOLUTION="playwright-java/src/test/java/C${NNN}_$(echo "$SLUG" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2)}; }1' OFS='').java" ;;
+
+  # Selenium + API automation (Java)
+  selenium)   SOLUTION="selenium-java/src/test/java/C${NNN}_$(echo "$SLUG" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2)}; }1' OFS='')Test.java" ;;
+  api)        SOLUTION="api-java/src/test/java/C${NNN}_$(echo "$SLUG" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2)}; }1' OFS='')Test.java" ;;
+
+  # (keep legacy if you still want it)
   playwright) SOLUTION="playwright/${NNN}_${SLUG}.spec.ts" ;;
-  *) echo "error: lang must be one of: java|python|sql|playwright"; exit 2 ;;
+
+  *) echo "error: lang must be one of: java|python|sql|playwright|pwts|pwpy|pwjava|selenium|api"; exit 2 ;;
 esac
 
 cd "$STUDY"
@@ -167,6 +184,112 @@ test("TODO", async ({ page }) => {
   // TODO
 });
 EOF2
+      ;;
+
+    pwpy)
+      cat > "$SOLUTION" <<'EOF2'
+from playwright.sync_api import sync_playwright
+
+def test_todo():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        # TODO
+        browser.close()
+EOF2
+      ;;
+
+    pwjava)
+      cat > "$SOLUTION" <<'EOF2'
+import com.microsoft.playwright.*;
+import org.junit.jupiter.api.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+public class PLACEHOLDER_CLASS_NAME {
+  static Playwright playwright;
+  static Browser browser;
+
+  @BeforeAll
+  static void setup() {
+    playwright = Playwright.create();
+    browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+  }
+
+  @AfterAll
+  static void teardown() {
+    if (browser != null) browser.close();
+    if (playwright != null) playwright.close();
+  }
+
+  @Test
+  void todo() {
+    Page page = browser.newPage();
+    // TODO
+    page.close();
+    assertTrue(true);
+  }
+}
+EOF2
+      BASE="$(basename "$SOLUTION" .java)"
+      CLASSNAME="${BASE%Test}"
+      sed -i '' "s/PLACEHOLDER_CLASS_NAME/$CLASSNAME/g" "$SOLUTION"
+      ;;
+
+    selenium)
+      cat > "$SOLUTION" <<'EOF2'
+import org.junit.jupiter.api.*;
+import org.openqa.selenium.*;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import static org.junit.jupiter.api.Assertions.*;
+
+public class PLACEHOLDER_CLASS_NAME {
+
+  @Test
+  void todo() {
+    ChromeOptions opts = new ChromeOptions();
+    opts.addArguments("--headless=new"); // set false for UI
+    WebDriver driver = new ChromeDriver(opts);
+    try {
+      // TODO
+      driver.get("https://example.com");
+      assertTrue(driver.getTitle().contains("Example Domain"));
+    } finally {
+      driver.quit();
+    }
+  }
+}
+EOF2
+      BASE="$(basename "$SOLUTION" .java)"
+      CLASSNAME="${BASE%Test}"
+      sed -i '' "s/PLACEHOLDER_CLASS_NAME/$CLASSNAME/g" "$SOLUTION"
+      ;;
+
+    api)
+      cat > "$SOLUTION" <<'EOF2'
+import org.junit.jupiter.api.Test;
+import static io.restassured.RestAssured.*;
+import static org.hamcrest.Matchers.*;
+
+public class PLACEHOLDER_CLASS_NAME {
+
+  @Test
+  void todo() {
+    // TODO
+    given()
+      .when().get("https://example.com")
+      .then().statusCode(200);
+  }
+}
+EOF2
+      BASE="$(basename "$SOLUTION" .java)"
+      CLASSNAME="${BASE%Test}"
+      sed -i '' "s/PLACEHOLDER_CLASS_NAME/$CLASSNAME/g" "$SOLUTION"
+      ;;
+
+    playwright)
+      # legacy TS folder (if you still use it)
+      playwright_stub > "$SOLUTION"
       ;;
   esac
 fi

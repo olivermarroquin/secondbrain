@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   sz-pick <lang> [kind]
+# Examples:
+#   sz-pick sql
+#   sz-pick java linkedlist
+#   sz-pick playwright
+#   sz-pick bash
+#
+# Behavior:
+# - Computes next NNN from notes/INDEX.md
+# - Asks Claude for: SLUG=..., KIND=..., then markdown body
+# - Runs sz-new itself (no shell-command output from Claude)
+# - Overwrites the created problems/NNN_slug.md with the markdown body
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: sz-pick <lang> [kind]"
+  exit 2
+fi
+
+LANG="$1"
+KIND="${2:-}"
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$ROOT" ]] || { echo "error: not in a git repo"; exit 2; }
+
+STUDY="$ROOT/01_projects/study_zone"
+INDEX="$STUDY/notes/INDEX.md"
+[[ -f "$INDEX" ]] || { echo "error: $INDEX not found"; exit 2; }
+
+cd "$STUDY"
+
+# Next NNN from INDEX
+LAST="$(grep -E '^[0-9]{3} \|' "$INDEX" | tail -n 1 | awk '{print $1}' || true)"
+if [[ -z "$LAST" ]]; then NEXT=1; else NEXT=$((10#$LAST + 1)); fi
+NNN="$(printf "%03d" "$NEXT")"
+
+PROMPT=$(cat <<EOF2
+You are the Study Zone scheduler.
+
+Read:
+- docs/SESSION.md
+- notes/INDEX.md
+- notes/ACTIVE.md
+
+Task:
+- Choose ONE next problem for language: $LANG
+- If a kind is provided by the user, respect it: ${KIND:-"(none)"}
+- Prefer common interview topics for that language.
+
+Output format (MUST be exact):
+SLUG=<lowercase_underscored_slug>
+KIND=<kind_or_blank>
+
+<Then the full problem statement markdown body (no code fences required).>
+
+Rules:
+- SLUG must be filesystem-safe: [a-z0-9_]+
+- KIND must be one word or blank. Examples: arrays, linkedlist, string, sql, playwright, bash
+- Do NOT output shell commands.
+EOF2
+)
+
+OUT="$(claude -p "$PROMPT")"
+
+SLUG="$(printf "%s\n" "$OUT" | sed -n 's/^SLUG=//p' | head -n 1 | tr -d '\r')"
+CKIND="$(printf "%s\n" "$OUT" | sed -n 's/^KIND=//p' | head -n 1 | tr -d '\r')"
+
+if [[ -z "$SLUG" ]]; then
+  echo "error: Claude did not output SLUG=..."
+  echo "$OUT"
+  exit 2
+fi
+
+if ! [[ "$SLUG" =~ ^[a-z0-9_]+$ ]]; then
+  echo "error: invalid slug: $SLUG"
+  exit 2
+fi
+
+# Markdown body begins after the first blank line following KIND=...
+BODY="$(printf "%s\n" "$OUT" | awk '
+  BEGIN{seen=0}
+  /^KIND=/{seen=1; next}
+  seen==1 && NF==0 {seen=2; next}
+  seen==2 {print}
+')"
+
+if [[ -z "$BODY" ]]; then
+  echo "error: Claude did not output a markdown body"
+  echo "$OUT"
+  exit 2
+fi
+
+# Create scaffolding
+if [[ -n "$CKIND" ]]; then
+  sz-new "$NNN" "$LANG" "$SLUG" "$CKIND"
+else
+  sz-new "$NNN" "$LANG" "$SLUG"
+fi
+
+PROBLEM_FILE="problems/${NNN}_${SLUG}.md"
+printf "%s\n" "$BODY" > "$PROBLEM_FILE"
+
+echo "Picked:"
+echo "  $NNN | $LANG | $SLUG ${CKIND:+| kind=$CKIND}"
+echo "Wrote:"
+echo "  $PROBLEM_FILE"
