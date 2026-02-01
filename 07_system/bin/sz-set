@@ -3,43 +3,79 @@ set -euo pipefail
 
 # Usage:
 #   sz-set NNN lang slug
-# Example:
+# Examples:
 #   sz-set 004 java two_sum
+#   sz-set 021 web flexbox_card_layout
 
 if [[ $# -ne 3 ]]; then
   echo "usage: sz-set NNN lang slug"
   exit 2
 fi
 
-NNN="$(printf "%03d" "$1" 2>/dev/null || true)"
+RAW_N="$1"
 LANG="$2"
 SLUG="$3"
 
+# base-10 safe parse (handles 021 correctly)
+NNN="$(printf "%03d" "$((10#$RAW_N))")"
+
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [[ -z "${ROOT}" ]]; then
-  echo "error: not inside a git repo"
-  exit 2
-fi
+[[ -n "${ROOT}" ]] || { echo "error: not inside a git repo"; exit 2; }
 
 STUDY="$ROOT/01_projects/study_zone"
-if [[ ! -d "$STUDY" ]]; then
-  echo "error: study_zone not found at $STUDY"
-  exit 2
-fi
+[[ -d "$STUDY" ]] || { echo "error: study_zone not found at $STUDY"; exit 2; }
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+slug_to_camel() {
+  # merge_two_sorted_lists -> MergeTwoSortedLists
+  echo "$1" | awk -F'_' '{for(i=1;i<=NF;i++){ $i=toupper(substr($i,1,1)) substr($i,2)}; }1' OFS=''
+}
 
 PROBLEM="problems/${NNN}_${SLUG}.md"
-SOLUTION="${LANG}/${NNN}_${SLUG}"
 REVIEW="reviews/${NNN}_${SLUG}_review.md"
 
 case "$LANG" in
-  java)       SOLUTION="${SOLUTION}.java" ;;
-  python)     SOLUTION="${SOLUTION}.py" ;;
-  sql)        SOLUTION="${SOLUTION}.sql" ;;
-  playwright) SOLUTION="${SOLUTION}.spec.ts" ;;
-  *) echo "error: lang must be one of: java|python|sql|playwright|pwts|pwpy|pwjava|selenium|api|web|pwts|pwpy|pwjava|selenium|api|web"; exit 2 ;;
+  java)   SOLUTION="java/${NNN}_${SLUG}.java" ;;
+  python) SOLUTION="python/${NNN}_${SLUG}.py" ;;
+  sql)    SOLUTION="sql/${NNN}_${SLUG}.sql" ;;
+
+  # legacy playwright-ts folder (if you still use it)
+  playwright) SOLUTION="playwright/${NNN}_${SLUG}.spec.ts" ;;
+
+  # Playwright variants
+  pwts)   SOLUTION="playwright-ts/tests/${NNN}_${SLUG}.spec.ts" ;;
+  pwpy)   SOLUTION="playwright-python/tests/test_${NNN}_${SLUG}.py" ;;
+  pwjava) SOLUTION="playwright-java/src/test/java/C${NNN}_$(slug_to_camel "$SLUG").java" ;;
+
+  # Selenium + API automation (Java)
+  selenium) SOLUTION="selenium-java/src/test/java/C${NNN}_$(slug_to_camel "$SLUG")Test.java" ;;
+  api)      SOLUTION="api-java/src/test/java/C${NNN}_$(slug_to_camel "$SLUG")Test.java" ;;
+
+  # Web bundle: ACTIVE.solution_file points to index.html
+  web)      SOLUTION="web/${NNN}_${SLUG}/index.html" ;;
+  *)
+    echo "error: lang must be one of: java|python|sql|playwright|pwts|pwpy|pwjava|selenium|api|web"
+    exit 2
+    ;;
 esac
 
-mkdir -p "$STUDY/notes" "$STUDY/problems" "$STUDY/$LANG" "$STUDY/reviews"
+# Ensure base folders exist
+mkdir -p "$STUDY/notes" "$STUDY/problems" "$STUDY/reviews"
+
+# Ensure lang-specific dirs exist
+case "$LANG" in
+  java) mkdir -p "$STUDY/java" ;;
+  python) mkdir -p "$STUDY/python" ;;
+  sql) mkdir -p "$STUDY/sql" ;;
+  playwright) mkdir -p "$STUDY/playwright" ;;
+  pwts) mkdir -p "$STUDY/playwright-ts/tests" ;;
+  pwpy) mkdir -p "$STUDY/playwright-python/tests" ;;
+  pwjava) mkdir -p "$STUDY/playwright-java/src/test/java" ;;
+  selenium) mkdir -p "$STUDY/selenium-java/src/test/java" ;;
+  api) mkdir -p "$STUDY/api-java/src/test/java" ;;
+  web) mkdir -p "$STUDY/web/${NNN}_${SLUG}" ;;
+esac
 
 # Write ACTIVE.md deterministically
 cat > "$STUDY/notes/ACTIVE.md" <<EOF2
@@ -67,13 +103,17 @@ Status values:
 EOF3
 fi
 
-# Append row if not already present for this NNN+lang
 ROW="$NNN | $LANG | $PROBLEM | $SOLUTION | $REVIEW | new"
-if ! rg -q "^$NNN \\| $LANG \\|" "$STUDY/notes/INDEX.md" 2>/dev/null; then
+
+if need_cmd rg; then
+  FOUND="$(rg "^$NNN \\| $LANG \\|" "$STUDY/notes/INDEX.md" || true)"
+else
+  FOUND="$(grep -E "^$NNN \\| $LANG \\|" "$STUDY/notes/INDEX.md" || true)"
+fi
+
+if [[ -z "$FOUND" ]]; then
   echo "$ROW" >> "$STUDY/notes/INDEX.md"
 else
-  # update existing line for NNN+lang to new row
-  # macOS sed needs -i '' for in-place
   sed -i '' "s#^$NNN | $LANG | .*#$ROW#g" "$STUDY/notes/INDEX.md"
 fi
 
