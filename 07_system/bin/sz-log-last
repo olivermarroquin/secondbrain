@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TAG=""
+TO=""
+N=1
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tag) TAG="${2:-}"; shift 2 ;;
+    --to)  TO="${2:-}"; shift 2 ;;
+    --n)   N="${2:-1}"; shift 2 ;;
+    *) echo "usage: sz-log-last [--tag <tag>] [--to <lang>] [--n <count>]"; exit 2 ;;
+  esac
+done
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "$ROOT" ]] || { echo "error: not in a git repo"; exit 2; }
+
+STUDY="$ROOT/01_projects/study_zone"
+LOG="$STUDY/notes/_qa_buffer.ndjson"
+[[ -f "$LOG" ]] || { echo "error: no Q/A log found at $LOG"; exit 2; }
+
+OUTDIR="$STUDY/notes/session_notes"
+mkdir -p "$OUTDIR"
+
+python3 - "$LOG" "$OUTDIR" "$N" "$TAG" "$TO" <<'PY'
+import json, sys, os, re
+log_path, outdir, n_str, tag, to = sys.argv[1:6]
+n = int(n_str)
+
+# Load NDJSON safely: keep only valid JSON objects.
+valid = []
+with open(log_path, "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        if not (line.startswith("{") and line.endswith("}")):
+            continue
+        try:
+            obj = json.loads(line)
+            if isinstance(obj, dict) and "q" in obj and "a" in obj:
+                valid.append(obj)
+        except json.JSONDecodeError:
+            continue
+
+if not valid:
+    print("error: no valid JSON entries found in notes/_qa_buffer.ndjson")
+    sys.exit(2)
+
+items = valid[-n:]
+
+def safe_name(s: str) -> str:
+    s = (s or "general").strip().lower()
+    s = re.sub(r"[^a-z0-9_]+", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s or "general"
+
+# Write each item to its destination file.
+written = []
+for o in items:
+    ts = o.get("ts","")
+    lang = safe_name(to) if to else safe_name(o.get("lang","general"))
+    q = o.get("q","").strip()
+    a = o.get("a","").strip()
+    problem = o.get("problem","").strip()
+    solution = o.get("solution","").strip()
+
+    path = os.path.join(outdir, f"{lang}.md")
+    os.makedirs(outdir, exist_ok=True)
+
+    with open(path, "a", encoding="utf-8") as out:
+        out.write("\n")
+        out.write(f"## {ts}\n\n")
+        if tag:
+            out.write(f"**Tag:** {tag}\n\n")
+        if problem or solution:
+            out.write(f"**Context:** {problem} | {solution}\n\n")
+        out.write(f"**Q:** {q}\n\n")
+        out.write("**A:**\n\n")
+        out.write(a + "\n")
+
+    written.append(path)
+
+# Print unique files written
+for p in sorted(set(written)):
+    print(f"Appended to: {p}")
+PY

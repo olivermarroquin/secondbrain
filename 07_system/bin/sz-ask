@@ -1,34 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage:
-#   sz-ask "your question"
-#   sz-ask gemini "your question"
-#   sz-ask codex "your question"
-
 ENGINE="gemini"
-if [[ "$1" == "gemini" || "$1" == "codex" ]]; then
-  ENGINE="$1"
-  shift
+if [[ "${1:-}" == "codex" || "${1:-}" == "gemini" ]]; then
+  ENGINE="$1"; shift
 fi
 
-QUESTION="$*"
-[[ -n "$QUESTION" ]] || { echo "usage: sz-ask [gemini|codex] \"question\""; exit 2; }
+DEBUG=0
+if [[ "${1:-}" == "--debug" ]]; then
+  DEBUG=1; shift
+fi
+
+QUESTION="${*:-}"
+if [[ -z "$QUESTION" ]]; then
+  echo "usage: sz-ask [--debug] [gemini|codex] \"your question\""
+  exit 2
+fi
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -n "$ROOT" ]] || { echo "error: not in a git repo"; exit 2; }
 
 STUDY="$ROOT/01_projects/study_zone"
 ACTIVE="$STUDY/notes/ACTIVE.md"
+[[ -f "$ACTIVE" ]] || { echo "error: $ACTIVE not found"; exit 2; }
 
 get() { sed -n "s/^$1: //p" "$ACTIVE"; }
 
+LANG="$(get lang)"
 PROBLEM="$(get problem_file)"
 SOLUTION="$(get solution_file)"
 REVIEW="$(get review_file)"
 
 PROMPT=$(cat <<EOF2
 Context (do not restate unless needed):
+- Active lang: $LANG
 - Problem: $PROBLEM
 - Solution: $SOLUTION
 - Review: $REVIEW
@@ -43,26 +48,32 @@ Rules:
 EOF2
 )
 
-DEBUG=0
-if [[ "${1:-}" == "--debug" ]]; then
-  DEBUG=1
-  shift
-fi
-
 if [[ "$DEBUG" -eq 1 ]]; then
-echo
-echo "=== $ENGINE QUESTION CONTEXT ==="
-echo "$PROMPT"
-echo "==============================="
-echo
+  echo
+  echo "=== $ENGINE QUESTION CONTEXT ==="
+  echo "$PROMPT"
+  echo "==============================="
+  echo
 fi
 
-case "$ENGINE" in
-  gemini)
-    printf "%s\n" "$PROMPT" | gemini -p ""
-    ;;
-  codex)
-    exec codex
-    ;;
-esac
+TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+LOG="$STUDY/notes/_qa_buffer.ndjson"
+mkdir -p "$STUDY/notes"
 
+# Run one-shot and capture output
+if [[ "$ENGINE" == "gemini" ]]; then
+  ANSWER="$(printf "%s\n" "$PROMPT" | gemini -p "")"
+else
+  ANSWER="$(codex -p "$PROMPT")"
+fi
+
+# Print answer to terminal
+printf "%s\n" "$ANSWER"
+
+# Append deterministic JSON line (NDJSON). No jq required.
+# Newlines are escaped so each entry is one line.
+q_esc="$(printf "%s" "$QUESTION" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')"
+a_esc="$(printf "%s" "$ANSWER"   | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')"
+
+printf '{"ts":"%s","lang":"%s","problem":"%s","solution":"%s","q":"%s","a":"%s"}\n' \
+  "$TS" "$LANG" "$PROBLEM" "$SOLUTION" "$q_esc" "$a_esc" >> "$LOG"
