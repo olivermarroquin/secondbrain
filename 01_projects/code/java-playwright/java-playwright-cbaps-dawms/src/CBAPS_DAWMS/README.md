@@ -1,4 +1,23 @@
-- Page Object Model Setup for CBAPS & DAWMS
+# CBAPS_DAWMS Automation Refactor Instructions (Authoritative)
+
+This document is the source of truth for refactoring the copied UIAutomation framework into a CBAPS_DAWMS-specific automation project.
+
+Scope:
+- Refactor existing Java + Playwright + TestNG Page Object Model code.
+- Preserve framework architecture, patterns, and utilities.
+- Rename and restructure packages, classes, tests, and page objects to reflect CBAPS and DAWMS domains.
+- Do NOT introduce a new framework or redesign the architecture.
+
+Non-goals:
+- Do not rewrite PlaywrightManager or Base unless required for CBAPS/DAWMS workflows.
+- Do not refactor unrelated legacy or training examples unless explicitly mentioned.
+- Do not touch generated output folders (target/, test-output/).
+
+The goal is a production-style CBAPS_DAWMS automation suite, not a demo or tutorial rewrite.
+- 
+
+
+Page Object Model Setup for CBAPS & DAWMS
     
     <aside>
     🎙️
@@ -973,3 +992,17 @@
         
         - For **parallel execution**, I’d ensure each **thread** has its own **BrowserContext** and **Page**, often with **ThreadLocal storage**, **so tests don’t share state.**
             - Need Code Built For this
+
+
+## Refactor Expectations for AI
+
+When applying this specification:
+- Prefer minimal, safe changes that align with these workflows.
+- Rename packages from generic or training-based names to domain-based ones (cbaps, dawms).
+- Ensure class names, file names, and package declarations stay consistent.
+- Page Objects must return the next Page Object to enforce workflow sequencing.
+- Tests must read as end-to-end business flows, not UI scripts.
+
+If information is missing:
+- Assume the existing UIAutomation structure is correct.
+- Do not invent new pages or tests beyond the workflows described here.

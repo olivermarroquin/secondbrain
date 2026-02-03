@@ -1,0 +1,529 @@
+diff --git a/src/CBAPS_DAWMS/pom.xml b/src/CBAPS_DAWMS/pom.xml
+new file mode 100644
+index 0000000..e4b5c8a
+--- /dev/null
++++ b/src/CBAPS_DAWMS/pom.xml
+@@ -0,0 +1,89 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project xmlns="http://maven.apache.org/POM/4.0.0"
++         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++    <modelVersion>4.0.0</modelVersion>
++
++    <groupId>com.cbaps.dawms</groupId>
++    <artifactId>cbaps-dawms-automation</artifactId>
++    <version>1.0-SNAPSHOT</version>
++    <packaging>jar</packaging>
++
++    <properties>
++        <maven.compiler.source>17</maven.compiler.source>
++        <maven.compiler.target>17</maven.compiler.target>
++        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
++        <playwright.version>1.40.0</playwright.version>
++        <testng.version>7.8.0</testng.version>
++        <extentreports.version>5.1.1</extentreports.version>
++        <poi.version>5.2.5</poi.version>
++        <slf4j.version>2.0.9</slf4j.version>
++        <logback.version>1.4.14</logback.version>
++    </properties>
++
++    <dependencies>
++        <!-- Playwright -->
++        <dependency>
++            <groupId>com.microsoft.playwright</groupId>
++            <artifactId>playwright</artifactId>
++            <version>${playwright.version}</version>
++        </dependency>
++
++        <!-- TestNG -->
++        <dependency>
++            <groupId>org.testng</groupId>
++            <artifactId>testng</artifactId>
++            <version>${testng.version}</version>
++        </dependency>
++
++        <!-- Extent Reports -->
++        <dependency>
++            <groupId>com.aventstack</groupId>
++            <artifactId>extentreports</artifactId>
++            <version>${extentreports.version}</version>
++        </dependency>
++
++        <!-- Apache POI for Excel -->
++        <dependency>
++            <groupId>org.apache.poi</groupId>
++            <artifactId>poi</artifactId>
++            <version>${poi.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>org.apache.poi</groupId>
++            <artifactId>poi-ooxml</artifactId>
++            <version>${poi.version}</version>
++        </dependency>
++
++        <!-- Logging -->
++        <dependency>
++            <groupId>org.slf4j</groupId>
++            <artifactId>slf4j-api</artifactId>
++            <version>${slf4j.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>ch.qos.logback</groupId>
++            <artifactId>logback-classic</artifactId>
++            <version>${logback.version}</version>
++        </dependency>
++    </dependencies>
++
++    <build>
++        <plugins>
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-surefire-plugin</artifactId>
++                <version>3.2.2</version>
++                <configuration>
++                    <suiteXmlFiles>
++                        <suiteXmlFile>testng.xml</suiteXmlFile>
++                    </suiteXmlFiles>
++                </configuration>
++            </plugin>
++        </plugins>
++    </build>
++
++</project>
+
+diff --git a/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/Base.java b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/Base.java
+new file mode 100644
+index 0000000..a7f2c7d
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/Base.java
+@@ -0,0 +1,71 @@
++package com.cbaps.dawms.library;
++
++import com.microsoft.playwright.*;
++import org.testng.annotations.AfterMethod;
++import org.testng.annotations.BeforeMethod;
++import org.testng.annotations.BeforeSuite;
++import org.testng.annotations.AfterSuite;
++
++import java.nio.file.Paths;
++
++/**
++ * Base class for all test classes providing Playwright setup and teardown.
++ */
++public class Base {
++
++    protected static Playwright playwright;
++    protected static Browser browser;
++    protected BrowserContext context;
++    protected Page page;
++
++    @BeforeSuite
++    public void launchBrowser() {
++        playwright = Playwright.create();
++        browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
++                .setHeadless(false)
++                .setSlowMo(100));
++    }
++
++    @AfterSuite
++    public void closeBrowser() {
++        if (browser != null) {
++            browser.close();
++        }
++        if (playwright != null) {
++            playwright.close();
++        }
++    }
++
++    @BeforeMethod
++    public void createContextAndPage() {
++        context = browser.newContext(new Browser.NewContextOptions()
++                .setRecordVideoDir(Paths.get("target/videos/")));
++        page = context.newPage();
++    }
++
++    @AfterMethod
++    public void closeContext() {
++        if (context != null) {
++            context.close();
++        }
++    }
++
++    /**
++     * Navigate to a URL.
++     */
++    protected void navigateTo(String url) {
++        page.navigate(url);
++    }
++
++    /**
++     * Capture a screenshot with a given name.
++     */
++    protected void captureScreenshot(String name) {
++        page.screenshot(new Page.ScreenshotOptions()
++                .setPath(Paths.get("target/screenshots/" + name + ".png"))
++                .setFullPage(true));
++    }
++}
+diff --git a/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/ExcelManager.java b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/ExcelManager.java
+new file mode 100644
+index 0000000..3e8e8d9
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/ExcelManager.java
+@@ -0,0 +1,72 @@
++package com.cbaps.dawms.library;
++
++import org.apache.poi.ss.usermodel.*;
++import org.apache.poi.xssf.usermodel.XSSFWorkbook;
++
++import java.io.FileInputStream;
++import java.io.IOException;
++import java.util.ArrayList;
++import java.util.List;
++
++/**
++ * Utility class for reading test data from Excel files.
++ */
++public class ExcelManager {
++
++    private Workbook workbook;
++    private Sheet sheet;
++
++    public ExcelManager(String filePath, String sheetName) throws IOException {
++        FileInputStream fis = new FileInputStream(filePath);
++        workbook = new XSSFWorkbook(fis);
++        sheet = workbook.getSheet(sheetName);
++        fis.close();
++    }
++
++    public int getRowCount() {
++        return sheet.getLastRowNum();
++    }
++
++    public int getColumnCount() {
++        return sheet.getRow(0).getLastCellNum();
++    }
++
++    public String getCellData(int rowNum, int colNum) {
++        Row row = sheet.getRow(rowNum);
++        if (row == null) return "";
++        Cell cell = row.getCell(colNum);
++        if (cell == null) return "";
++
++        DataFormatter formatter = new DataFormatter();
++        return formatter.formatCellValue(cell);
++    }
++
++    public Object[][] getTestData() {
++        int rowCount = getRowCount();
++        int colCount = getColumnCount();
++        Object[][] data = new Object[rowCount][colCount];
++
++        for (int i = 1; i <= rowCount; i++) {
++            for (int j = 0; j < colCount; j++) {
++                data[i - 1][j] = getCellData(i, j);
++            }
++        }
++        return data;
++    }
++
++    public List<String[]> getTestDataAsList() {
++        List<String[]> data = new ArrayList<>();
++        int rowCount = getRowCount();
++        int colCount = getColumnCount();
++
++        for (int i = 1; i <= rowCount; i++) {
++            String[] rowData = new String[colCount];
++            for (int j = 0; j < colCount; j++) {
++                rowData[j] = getCellData(i, j);
++            }
++            data.add(rowData);
++        }
++        return data;
++    }
++
++    public void close() throws IOException {
++        if (workbook != null) {
++            workbook.close();
++        }
++    }
++}
+diff --git a/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/ExtentReportManager.java b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/ExtentReportManager.java
+new file mode 100644
+index 0000000..5c5c1a1
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/ExtentReportManager.java
+@@ -0,0 +1,56 @@
++package com.cbaps.dawms.library;
++
++import com.aventstack.extentreports.ExtentReports;
++import com.aventstack.extentreports.ExtentTest;
++import com.aventstack.extentreports.reporter.ExtentSparkReporter;
++import com.aventstack.extentreports.reporter.configuration.Theme;
++
++/**
++ * Manager class for Extent Reports.
++ */
++public class ExtentReportManager {
++
++    private static ExtentReports extent;
++    private static ThreadLocal<ExtentTest> test = new ThreadLocal<>();
++
++    public static void initReports() {
++        if (extent == null) {
++            ExtentSparkReporter spark = new ExtentSparkReporter("target/extent-reports/report.html");
++            spark.config().setTheme(Theme.STANDARD);
++            spark.config().setDocumentTitle("CBAPS DAWMS Automation Report");
++            spark.config().setReportName("Test Execution Report");
++
++            extent = new ExtentReports();
++            extent.attachReporter(spark);
++            extent.setSystemInfo("Environment", "QA");
++            extent.setSystemInfo("Browser", "Chromium");
++        }
++    }
++
++    public static void createTest(String testName) {
++        ExtentTest extentTest = extent.createTest(testName);
++        test.set(extentTest);
++    }
++
++    public static ExtentTest getTest() {
++        return test.get();
++    }
++
++    public static void logPass(String message) {
++        getTest().pass(message);
++    }
++
++    public static void logFail(String message) {
++        getTest().fail(message);
++    }
++
++    public static void logInfo(String message) {
++        getTest().info(message);
++    }
++
++    public static void flushReports() {
++        if (extent != null) {
++            extent.flush();
++        }
++    }
++}
+diff --git a/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/PlaywrightManager.java b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/PlaywrightManager.java
+new file mode 100644
+index 0000000..5f26747
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/library/PlaywrightManager.java
+@@ -0,0 +1,78 @@
++package com.cbaps.dawms.library;
++
++import com.microsoft.playwright.*;
++
++import java.nio.file.Paths;
++
++/**
++ * Singleton manager for Playwright browser instances.
++ */
++public class PlaywrightManager {
++
++    private static PlaywrightManager instance;
++    private Playwright playwright;
++    private Browser browser;
++    private BrowserContext context;
++    private Page page;
++
++    private PlaywrightManager() {
++        playwright = Playwright.create();
++    }
++
++    public static synchronized PlaywrightManager getInstance() {
++        if (instance == null) {
++            instance = new PlaywrightManager();
++        }
++        return instance;
++    }
++
++    public void launchBrowser(boolean headless) {
++        browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
++                .setHeadless(headless)
++                .setSlowMo(50));
++    }
++
++    public void createContext() {
++        context = browser.newContext(new Browser.NewContextOptions()
++                .setRecordVideoDir(Paths.get("target/videos/")));
++    }
++
++    public void createPage() {
++        page = context.newPage();
++    }
++
++    public Page getPage() {
++        return page;
++    }
++
++    public BrowserContext getContext() {
++        return context;
++    }
++
++    public Browser getBrowser() {
++        return browser;
++    }
++
++    public void closePage() {
++        if (page != null) {
++            page.close();
++        }
++    }
++
++    public void closeContext() {
++        if (context != null) {
++            context.close();
++        }
++    }
++
++    public void closeBrowser() {
++        if (browser != null) {
++            browser.close();
++        }
++        if (playwright != null) {
++            playwright.close();
++        }
++        instance = null;
++    }
++}
+diff --git a/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/pages/LoginPage.java b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/pages/LoginPage.java
+new file mode 100644
+index 0000000..2f6e449
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/pages/LoginPage.java
+@@ -0,0 +1,47 @@
++package com.cbaps.dawms.pages;
++
++import com.microsoft.playwright.Locator;
++import com.microsoft.playwright.Page;
++
++/**
++ * Page Object for Login functionality.
++ */
++public class LoginPage {
++
++    private final Page page;
++
++    // Locators
++    private final Locator usernameInput;
++    private final Locator passwordInput;
++    private final Locator loginButton;
++    private final Locator errorMessage;
++
++    public LoginPage(Page page) {
++        this.page = page;
++        this.usernameInput = page.locator("#username");
++        this.passwordInput = page.locator("#password");
++        this.loginButton = page.locator("#login-button");
++        this.errorMessage = page.locator(".error-message");
++    }
++
++    public void enterUsername(String username) {
++        usernameInput.fill(username);
++    }
++
++    public void enterPassword(String password) {
++        passwordInput.fill(password);
++    }
++
++    public void clickLogin() {
++        loginButton.click();
++    }
++
++    public void login(String username, String password) {
++        enterUsername(username);
++        enterPassword(password);
++        clickLogin();
++    }
++
++    public String getErrorMessage() {
++        return errorMessage.textContent();
++    }
++}
+diff --git a/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/tests/SampleTest.java b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/tests/SampleTest.java
+new file mode 100644
+index 0000000..c4bb88c
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/java/com/cbaps/dawms/tests/SampleTest.java
+@@ -0,0 +1,32 @@
++package com.cbaps.dawms.tests;
++
++import com.cbaps.dawms.library.Base;
++import com.cbaps.dawms.library.ExtentReportManager;
++import org.testng.Assert;
++import org.testng.annotations.AfterClass;
++import org.testng.annotations.BeforeClass;
++import org.testng.annotations.Test;
++
++/**
++ * Sample test class demonstrating the framework structure.
++ */
++public class SampleTest extends Base {
++
++    @BeforeClass
++    public void setupReports() {
++        ExtentReportManager.initReports();
++    }
++
++    @Test
++    public void testGoogleTitle() {
++        ExtentReportManager.createTest("Google Title Test");
++        navigateTo("https://www.google.com");
++        String title = page.title();
++        Assert.assertTrue(title.contains("Google"), "Title should contain 'Google'");
++        ExtentReportManager.logPass("Google page title verified: " + title);
++    }
++
++    @AfterClass
++    public void teardownReports() {
++        ExtentReportManager.flushReports();
++    }
++}
+diff --git a/src/CBAPS_DAWMS/src/test/resources/logback.xml b/src/CBAPS_DAWMS/src/test/resources/logback.xml
+new file mode 100644
+index 0000000..a7e6a95
+--- /dev/null
++++ b/src/CBAPS_DAWMS/src/test/resources/logback.xml
+@@ -0,0 +1,20 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<configuration>
++    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
++        <encoder>
++            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
++        </encoder>
++    </appender>
++
++    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
++        <file>target/logs/test-execution.log</file>
++        <encoder>
++            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
++        </encoder>
++    </appender>
++
++    <root level="INFO">
++        <appender-ref ref="CONSOLE"/>
++        <appender-ref ref="FILE"/>
++    </root>
++</configuration>
+diff --git a/src/CBAPS_DAWMS/testng.xml b/src/CBAPS_DAWMS/testng.xml
+new file mode 100644
+index 0000000..f8b7e54
+--- /dev/null
++++ b/src/CBAPS_DAWMS/testng.xml
+@@ -0,0 +1,11 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
++<suite name="CBAPS DAWMS Test Suite" parallel="false">
++    <test name="Sample Tests">
++        <classes>
++            <class name="com.cbaps.dawms.tests.SampleTest"/>
++        </classes>
++    </test>
++</suite>
