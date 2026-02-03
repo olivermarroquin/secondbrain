@@ -6,7 +6,7 @@ DEST="$ROOT/src/CBAPS_DAWMS"
 OUT="$DEST/.ai_refactor"
 
 # Change this to your actual command if different (e.g. "claude", "claude-code", etc.)
-CLAUDE_CMD="claude-code"
+CLAUDE_CMD="claude"
 
 mkdir -p "$OUT"
 
