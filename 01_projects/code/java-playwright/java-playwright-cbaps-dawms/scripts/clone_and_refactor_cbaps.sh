@@ -57,7 +57,7 @@ EOF
 echo "Prompt: $OUT/prompt.md"
 echo "Running Claude command: $CLAUDE_CMD"
 
-cat "$OUT/prompt.md" | $CLAUDE_CMD > "$OUT/changes.patch"
+cat "$OUT/prompt.md" | $CLAUDE_CMD -p --output-format text > "$OUT/changes.patch"
 
 echo "Patch: $OUT/changes.patch"
 echo "Checking patch applies cleanly..."
