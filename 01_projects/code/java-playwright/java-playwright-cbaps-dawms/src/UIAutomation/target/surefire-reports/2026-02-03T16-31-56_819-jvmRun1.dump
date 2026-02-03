@@ -1,0 +1,251 @@
+# Created at 2026-02-03T16:34:31.130
+Exiting self fork JVM. Received SHUTDOWN command from Maven shutdown hook.
+Thread dump before exiting the process (94870@Olivers-MacBook-Pro.local):
+"main" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+        at java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos(AbstractQueuedSynchronizer.java:1763)
+        at java.base@21.0.7/java.util.concurrent.ArrayBlockingQueue.poll(ArrayBlockingQueue.java:435)
+        at app//com.microsoft.playwright.impl.PipeTransport.poll(PipeTransport.java:68)
+        at app//com.microsoft.playwright.impl.Connection.processOneMessage(Connection.java:205)
+        at app//com.microsoft.playwright.impl.ChannelOwner.runUntil(ChannelOwner.java:130)
+        at app//com.microsoft.playwright.impl.PageImpl.lambda$pause$60(PageImpl.java:1051)
+        at app//com.microsoft.playwright.impl.PageImpl$$Lambda/0x000000d801261e68.run(Unknown Source)
+        at app//com.microsoft.playwright.impl.LoggingSupport.lambda$withLogging$0(LoggingSupport.java:36)
+        at app//com.microsoft.playwright.impl.LoggingSupport$$Lambda/0x000000d801218af8.get(Unknown Source)
+        at app//com.microsoft.playwright.impl.LoggingSupport.withLogging(LoggingSupport.java:47)
+        at app//com.microsoft.playwright.impl.ChannelOwner.withLogging(ChannelOwner.java:97)
+        at app//com.microsoft.playwright.impl.LoggingSupport.withLogging(LoggingSupport.java:35)
+        at app//com.microsoft.playwright.impl.PageImpl.pause(PageImpl.java:1045)
+        at app//com.playwright.week4.CustomerLoginHomeworkTests.CustomerLogin(CustomerLoginHomeworkTests.java:22)
+        at java.base@21.0.7/java.lang.invoke.LambdaForm$DMH/0x000000d801148000.invokeVirtual(LambdaForm$DMH)
+        at java.base@21.0.7/java.lang.invoke.LambdaForm$MH/0x000000d801148800.invoke(LambdaForm$MH)
+        at java.base@21.0.7/java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder)
+        at java.base@21.0.7/jdk.internal.reflect.DirectMethodHandleAccessor.invokeImpl(DirectMethodHandleAccessor.java:153)
+        at java.base@21.0.7/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+        at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+        at app//org.testng.internal.invokers.MethodInvocationHelper.invokeMethod(MethodInvocationHelper.java:141)
+        at app//org.testng.internal.invokers.TestInvoker.invokeMethod(TestInvoker.java:686)
+        at app//org.testng.internal.invokers.TestInvoker.invokeTestMethod(TestInvoker.java:230)
+        at app//org.testng.internal.invokers.MethodRunner.runInSequence(MethodRunner.java:63)
+        at app//org.testng.internal.invokers.TestInvoker$MethodInvocationAgent.invoke(TestInvoker.java:992)
+        at app//org.testng.internal.invokers.TestInvoker.invokeTestMethods(TestInvoker.java:203)
+        at app//org.testng.internal.invokers.TestMethodWorker.invokeTestMethods(TestMethodWorker.java:154)
+        at app//org.testng.internal.invokers.TestMethodWorker.run(TestMethodWorker.java:134)
+        at app//org.testng.TestRunner$$Lambda/0x000000d80118adc0.accept(Unknown Source)
+        at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+        at app//org.testng.TestRunner.privateRun(TestRunner.java:739)
+        at app//org.testng.TestRunner.run(TestRunner.java:614)
+        at app//org.testng.SuiteRunner.runTest(SuiteRunner.java:421)
+        at app//org.testng.SuiteRunner.runSequentially(SuiteRunner.java:413)
+        at app//org.testng.SuiteRunner.privateRun(SuiteRunner.java:373)
+        at app//org.testng.SuiteRunner.run(SuiteRunner.java:312)
+        at app//org.testng.SuiteRunnerWorker.runSuite(SuiteRunnerWorker.java:52)
+        at app//org.testng.SuiteRunnerWorker.run(SuiteRunnerWorker.java:95)
+        at app//org.testng.TestNG.runSuitesSequentially(TestNG.java:1274)
+        at app//org.testng.TestNG.runSuitesLocally(TestNG.java:1208)
+        at app//org.testng.TestNG.runSuites(TestNG.java:1112)
+        at app//org.testng.TestNG.run(TestNG.java:1079)
+        at app//org.apache.maven.surefire.testng.TestNGExecutor.run(TestNGExecutor.java:155)
+        at app//org.apache.maven.surefire.testng.TestNGDirectoryTestSuite.executeMulti(TestNGDirectoryTestSuite.java:169)
+        at app//org.apache.maven.surefire.testng.TestNGDirectoryTestSuite.execute(TestNGDirectoryTestSuite.java:88)
+        at app//org.apache.maven.surefire.testng.TestNGProvider.invoke(TestNGProvider.java:137)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:385)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.execute(ForkedBooter.java:162)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.run(ForkedBooter.java:507)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:495)
+
+"Reference Handler" 
+   java.lang.Thread.State: RUNNABLE
+        at java.base@21.0.7/java.lang.ref.Reference.waitForReferencePendingList(Native Method)
+        at java.base@21.0.7/java.lang.ref.Reference.processPendingReferences(Reference.java:246)
+        at java.base@21.0.7/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)
+
+"Finalizer" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/java.lang.Object.wait0(Native Method)
+        at java.base@21.0.7/java.lang.Object.wait(Object.java:366)
+        at java.base@21.0.7/java.lang.Object.wait(Object.java:339)
+        at java.base@21.0.7/java.lang.ref.NativeReferenceQueue.await(NativeReferenceQueue.java:48)
+        at java.base@21.0.7/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:158)
+        at java.base@21.0.7/java.lang.ref.NativeReferenceQueue.remove(NativeReferenceQueue.java:89)
+        at java.base@21.0.7/java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:173)
+
+"Signal Dispatcher" 
+   java.lang.Thread.State: RUNNABLE
+
+"Notification Thread" 
+   java.lang.Thread.State: RUNNABLE
+
+"Common-Cleaner" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+        at java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1852)
+        at java.base@21.0.7/java.lang.ref.ReferenceQueue.await(ReferenceQueue.java:71)
+        at java.base@21.0.7/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:143)
+        at java.base@21.0.7/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:218)
+        at java.base@21.0.7/jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:140)
+        at java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596)
+        at java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)
+        at java.base@21.0.7/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:186)
+
+"surefire-forkedjvm-stream-flusher" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+        at java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos(AbstractQueuedSynchronizer.java:1763)
+        at java.base@21.0.7/java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:1182)
+        at java.base@21.0.7/java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:899)
+        at java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+        at java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+        at java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+        at java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596)
+        at java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)
+
+"surefire-forkedjvm-command-thread" 
+   java.lang.Thread.State: RUNNABLE
+        at java.management@21.0.7/sun.management.ThreadImpl.getThreadInfo1(Native Method)
+        at java.management@21.0.7/sun.management.ThreadImpl.getThreadInfo(ThreadImpl.java:187)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.generateThreadDump(ForkedBooter.java:579)
+        at app//org.apache.maven.surefire.booter.ForkedBooter.access$600(ForkedBooter.java:79)
+        at app//org.apache.maven.surefire.booter.ForkedBooter$4.update(ForkedBooter.java:315)
+        at app//org.apache.maven.surefire.booter.CommandReader$CommandRunnable.callListeners(CommandReader.java:357)
+        at app//org.apache.maven.surefire.booter.CommandReader$CommandRunnable.exitByConfiguration(CommandReader.java:367)
+        at app//org.apache.maven.surefire.booter.CommandReader$CommandRunnable.run(CommandReader.java:330)
+        at java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596)
+        at java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)
+
+"ForkJoinPool.commonPool-worker-1" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-2" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-3" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-4" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-6" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-5" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-7" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-8" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-10" 
+   java.lang.Thread.State: TIMED_WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.parkUntil(LockSupport.java:449)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1891)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"ForkJoinPool.commonPool-worker-11" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:1893)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1809)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)
+
+"process reaper (pid 95066)" 
+   java.lang.Thread.State: RUNNABLE
+        at java.base@21.0.7/java.lang.ProcessHandleImpl.waitForProcessExit0(Native Method)
+        at java.base@21.0.7/java.lang.ProcessHandleImpl$1.run(ProcessHandleImpl.java:163)
+        at java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+        at java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+        at java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596)
+        at java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)
+        at java.base@21.0.7/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:186)
+
+"Thread-7" 
+   java.lang.Thread.State: RUNNABLE
+        at java.base@21.0.7/java.io.FileInputStream.readBytes(Native Method)
+        at java.base@21.0.7/java.io.FileInputStream.read(FileInputStream.java:287)
+        at java.base@21.0.7/java.io.BufferedInputStream.read1(BufferedInputStream.java:345)
+        at java.base@21.0.7/java.io.BufferedInputStream.implRead(BufferedInputStream.java:420)
+        at java.base@21.0.7/java.io.BufferedInputStream.read(BufferedInputStream.java:405)
+        at java.base@21.0.7/java.io.BufferedInputStream.fill(BufferedInputStream.java:291)
+        at java.base@21.0.7/java.io.BufferedInputStream.implRead(BufferedInputStream.java:325)
+        at java.base@21.0.7/java.io.BufferedInputStream.read(BufferedInputStream.java:312)
+        at java.base@21.0.7/java.io.FilterInputStream.read(FilterInputStream.java:71)
+        at app//com.microsoft.playwright.impl.ReaderThread.readIntLE(PipeTransport.java:105)
+        at app//com.microsoft.playwright.impl.ReaderThread.readMessage(PipeTransport.java:139)
+        at app//com.microsoft.playwright.impl.ReaderThread.run(PipeTransport.java:125)
+
+"Thread-8" 
+   java.lang.Thread.State: WAITING
+        at java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method)
+        at java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+        at java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:519)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3780)
+        at java.base@21.0.7/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3725)
+        at java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1712)
+        at java.base@21.0.7/java.util.concurrent.ArrayBlockingQueue.take(ArrayBlockingQueue.java:420)
+        at app//com.microsoft.playwright.impl.WriterThread.run(PipeTransport.java:168)
+
+"SIGINT handler" 
+   java.lang.Thread.State: RUNNABLE
+        at java.base@21.0.7/java.io.UnixFileSystem.delete0(Native Method)
+        at java.base@21.0.7/java.io.UnixFileSystem.delete(UnixFileSystem.java:269)
+        at java.base@21.0.7/java.io.File.delete(File.java:1075)
+        at java.base@21.0.7/java.io.DeleteOnExitHook.runHooks(DeleteOnExitHook.java:81)
+        at java.base@21.0.7/java.io.DeleteOnExitHook$1.run(DeleteOnExitHook.java:50)
+        at java.base@21.0.7/java.lang.Shutdown.runHooks(Shutdown.java:130)
+        at java.base@21.0.7/java.lang.Shutdown.exit(Shutdown.java:167)
+        at java.base@21.0.7/java.lang.Terminator$1.handle(Terminator.java:51)
+        at java.base@21.0.7/jdk.internal.misc.Signal$1.run(Signal.java:218)
+        at java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596)
+        at java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)
+
+
+
