@@ -22,3 +22,7 @@
 **/.ai_refactor/
 
 **/target/
+
+# macOS
+.DS_Store
+**/.DS_Store
