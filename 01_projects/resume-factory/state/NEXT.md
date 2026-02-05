@@ -18,5 +18,7 @@ Focus: Automate end-to-end resume tailoring, tracking, and interview prep from j
 - If a task becomes invalid, mark it as [obsolete] and explain why.
 - New tasks are appended (do not insert above in-progress work).
 
-## Next Actions Queue
-1) (fill)
+## Next Actions Queue (this will be empty later for AI to be able to use it)
+1) Golden run Job #1: run intake → verify → resume-select/preview → suggest edits → approve edits → generate resume.docx
+2) Golden run Job #1: run jobs-apply-batch (dry-run → real) → apply → prune if needed → jobs-mark-applied-last (dry-run → apply/commit/push)
+3) Close session correctly (git clean, session-close)
