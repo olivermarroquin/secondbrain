@@ -1,0 +1,63 @@
+Job Details
+Skills
+FOCUS
+Continuous Delivery
+Innovation
+Mentorship
+JavaScript
+C#
+Java
+TypeScript
+Quality Assurance
+Management
+Acceptance Testing
+Documentation
+Collaboration
+Agile
+Cypress
+Manual Testing
+Automated Testing
+Regression Analysis
+Load Testing
+Testing
+RESTful
+Test Management
+Application Lifecycle Management
+Microsoft TFS
+API QA
+Apache JMeter
+POSTMAN
+Performance Testing
+Cloud Computing
+Amazon Web Services
+Microsoft Azure
+Heroku
+SOA
+Artificial Intelligence
+Messaging
+Summary
+RESPONSIBILITIES:
+Kforce's Phoenix-based client needs to add a Lead Software QA Engineer to their team. This is a fully remote role that can be performed from anywhere in the US (AZ/MST hours required). This is a ten month contract assignment to start.
+
+Duties & Role Description:
+The Quality Assurance Engineer is responsible for ensuring the quality, reliability, and performance of Republic Services' Web, Mobile, and Application portfolios. Operating remotely within the AZ time zone, this role leads end-to-end quality efforts with a strong focus on automated testing within Agile and Continuous Delivery environments.
+
+The Lead Quality Assurance Engineer will architect and implement automation frameworks, develop and maintain automated and manual test plans, and drive innovation in testing strategies. A key part of the role is mentoring Software Test Engineers, reviewing specifications, and shaping test architectures that enhance quality and reduce risk.
+
+Core responsibilities include building and executing automated testing for end-to-end integration across applications, platforms, and devices using JavaScript, C#, Java, TypeScript, and related tools. The Lead Quality Assurance Engineer will evaluate and implement testing tools, manage defects across release cycles, ensure traceability to requirements, and support user acceptance testing. Additional duties include analyzing test metrics, ensuring adherence to documentation standards, and participating in functional, system, regression, and load testing. Collaboration with developers and Agile teams is essential to ensure software meets functional and technical standards.
+
+REQUIREMENTS:
+* Experience with Cypress, AWS, and APIs
+* Experience in both automated and manual testing
+* To be considered for this position, candidates must have experience in a similar role, or they must possess significant knowledge, experience, and abilities to successfully perform the responsibilities listed
+* Relevant education and/or training will be considered a plus
+
+Preferred Qualifications:
+* Experience with automation testing methodologies such as regression, functional, unit, integration, coverage, performance, and load testing
+* Background in testing applications that integrate through RESTful APIs
+* Familiarity with test management tools such as qTest, ALM, or TFS
+* Experience with API testing frameworks (Karate, Gatling, JMeter, Postman)
+* Exposure to load and performance testing
+* Knowledge of cloud platforms including AWS, Azure, Heroku, Perfecto Mobile, or SauceLabs
+* Experience reviewing code through pull requests
+* Understanding of Service-Oriented Architecture (SOA)
