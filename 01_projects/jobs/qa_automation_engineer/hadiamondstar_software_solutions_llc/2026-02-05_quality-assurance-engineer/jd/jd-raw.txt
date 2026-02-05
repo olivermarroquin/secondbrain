@@ -1,0 +1,37 @@
+Job Details
+Skills
+QA Automation
+Selenium
+ETL
+Health Care
+SQL
+Summary
+Job Description:
+We are seeking a Senior Software Engineer / Senior QA Automation Engineer with strong expertise in backend testing, ETL/data validation, and test automation. This role will support enterprise healthcare initiatives including claims processing, with upcoming work in enrollments and accumulators. The ideal candidate has hands-on experience with SQL-heavy ETL testing, Selenium automation, and modern data platforms including MongoDB (preferred), along with a solid understanding of Agile delivery practices.
+Key Responsibilities
+Perform backend testing and validate complex data flows across systems and integrations
+Execute ETL testing and perform deep data validation using strong SQL
+Develop and maintain automated test scripts using Selenium (SDET-focused)
+Support automation pipelines using Java and Jenkins
+Validate data as part of migration efforts from DB2 to MongoDB (MongoDB preferred)
+Create and execute test cases, document results, and log defects in Agile tools
+Participate in Agile ceremonies including stand-ups, sprint planning, grooming, and retrospectives
+Collaborate with cross-functional teams to clarify requirements, user stories, and acceptance criteria
+Support testing for projects that include API testing and service validations
+Ensure high-quality delivery through strong communication and proactive issue resolution
+Required Qualifications
+7+ years of experience in software testing / QA / automation engineering
+Strong experience in ETL testing and SQL validation (MUST HAVE)
+Strong experience as an Automation Tester / SDET using Selenium (MUST HAVE)
+Experience with Java and Jenkins for test automation
+Experience in healthcare domain (MUST HAVE)
+Hands-on experience in backend testing and data-driven testing
+Strong Agile experience (user stories, defect writing, participation in ceremonies)
+Excellent written and verbal communication skills
+Must be able to complete a Glider SQL assessment prior to submission/selection
+Preferred Qualifications
+Experience with MongoDB (preferred)
+Experience supporting migrations from DB2 to MongoDB
+Experience with Published Data Views (PDV)
+Experience with Facets / healthcare claims platforms (nice to have)
+API testing experience (Postman/Swagger/REST validation)
