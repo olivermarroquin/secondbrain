@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="CBAPS DAWMS Enhanced Suite" verbose="1">
+    <test name="CBAPS Tests">
+        <classes>
+            <class name="com.playwright.cbaps.tests.CBAPSEndToEndTests"/>
+        </classes>
+    </test>
+    
+    <test name="CBAPS API Tests">
+        <classes>
+            <class name="com.playwright.cbaps.api.CBAPS_APITests"/>
+        </classes>
+    </test>
+</suite>

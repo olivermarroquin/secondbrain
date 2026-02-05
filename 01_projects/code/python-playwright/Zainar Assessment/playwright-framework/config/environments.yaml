@@ -1,0 +1,20 @@
+dev:
+  base_url: "https://the-internet.herokuapp.com"
+  timeout: 30000
+  browser: chromium
+  headless: false
+  slow_mo: 0
+
+staging:
+  base_url: "https://the-internet.herokuapp.com"
+  timeout: 45000
+  browser: chromium
+  headless: true
+  slow_mo: 0
+
+prod:
+  base_url: "https://the-internet.herokuapp.com"
+  timeout: 60000
+  browser: chromium
+  headless: true
+  slow_mo: 0

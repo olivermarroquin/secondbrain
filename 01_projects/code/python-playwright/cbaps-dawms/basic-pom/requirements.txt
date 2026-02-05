@@ -1,0 +1,23 @@
+# Playwright Python Automation Framework
+# CBAPS and DAWMS Test Dependencies
+
+# Core Testing Framework
+playwright==1.40.0
+pytest==7.4.3
+pytest-html==4.1.1
+pytest-xdist==3.5.0  # For parallel execution
+
+# Data Handling
+openpyxl==3.1.2  # Excel file handling
+Faker==22.0.0    # Test data generation
+
+# Utilities
+python-dotenv==1.0.0  # Environment configuration
+
+# Optional: Allure reporting (alternative to pytest-html)
+# allure-pytest==2.13.2
+
+# Development Dependencies
+# black==23.12.1       # Code formatting
+# flake8==7.0.0        # Code linting
+# mypy==1.8.0          # Type checking
