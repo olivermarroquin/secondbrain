@@ -13,6 +13,8 @@ Read order for system context:
 
 Operator helpers live in: ../../01_projects/resume-factory/scripts/ (rf-context, rf-checkpoint, rf-idea)
 
+AI behavior is governed by: AGENTS.md
+
 Rules:
 - Make small, testable changes.
 - Add verification steps.

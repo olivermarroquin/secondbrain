@@ -7,6 +7,11 @@ This document defines how system truth, change history, logs, and future ideas a
 - rf-checkpoint: create/update CURRENT + checkpoint + LATEST bundle after a run
 - rf-idea: append an idea to backlog/resume-factory/ideas.md with timestamp
 
+## AI Assistance (Governance)
+AI behavior and collaboration rules are defined in: AGENTS.md  
+Before any AI work, run: rf-context --full
+Canonical AI execution prompt lives in: AGENT_PROMPT.md  
+Print via: rf-prompt
 
 Goal
 
