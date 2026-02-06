@@ -7,7 +7,7 @@
   "employment_type": "unknown",
   "source": "https://www.dice.com/job-detail/e73e4b93-50a2-4ece-b93a-f02211bebede",
   "date_found": "2026-02-05",
-  "date_applied": null,
-  "status": "not_applied",
+  "date_applied": "2026-02-05",
+  "status": "applied",
   "priority": "unknown"
 }
