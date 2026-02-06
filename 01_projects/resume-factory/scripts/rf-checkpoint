@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# rf-checkpoint (v0)
+# Scaffold + file organizer for resume-factory checkpoint bundles.
+#
+# This script does NOT generate CURRENT.md or checkpoints.
+# It normalizes and stores provided artifacts and rewrites LATEST.md deterministically.
+#
+# Usage examples:
+#   rf-checkpoint --date 2026-02-06 --run-id run06 --dry-run
+#
+#   rf-checkpoint --date 2026-02-06 --run-id run06 \
+#     --log 07_system/checkpoints/resume-factory/logs/2026-02-06_run06_full-run-log.md \
+#     --synth 07_system/checkpoints/resume-factory/analysis/2026-02-06_run06_post-run_synthesis.md \
+#     --archive 07_system/checkpoints/resume-factory/archives/2026-02-06_run06_archive-notes.md \
+#     --current 07_system/checkpoints/resume-factory/CURRENT.md \
+#     --checkpoint 07_system/checkpoints/resume-factory/checkpoints/2026-02-06_checkpoint.md
+
+usage() {
+  cat <<EOF
+Usage: rf-checkpoint --date YYYY-MM-DD [--run-id runNN] [--dry-run]
+                    [--log <path>] [--synth <path>] [--archive <path>]
+                    [--current <path>] [--checkpoint <path>]
+
+Notes:
+- v0 does not generate artifacts; it files provided ones and updates LATEST.md.
+- Run from anywhere inside secondbrain; root is auto-detected (expects 07_system/).
+EOF
+}
+
+DATE=""
+RUN_ID="run01"
+DRY_RUN="0"
+LOG_SRC=""
+SYNTH_SRC=""
+ARCHIVE_SRC=""
+CURRENT_SRC=""
+CHECKPOINT_SRC=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --date) DATE="${2:-}"; shift 2 ;;
+    --run-id) RUN_ID="${2:-}"; shift 2 ;;
+    --dry-run) DRY_RUN="1"; shift 1 ;;
+    --log) LOG_SRC="${2:-}"; shift 2 ;;
+    --synth) SYNTH_SRC="${2:-}"; shift 2 ;;
+    --archive) ARCHIVE_SRC="${2:-}"; shift 2 ;;
+    --current) CURRENT_SRC="${2:-}"; shift 2 ;;
+    --checkpoint) CHECKPOINT_SRC="${2:-}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1"; usage; exit 2 ;;
+  esac
+done
+
+if [ -z "$DATE" ]; then
+  echo "Error: --date is required."
+  usage
+  exit 2
+fi
+
+if ! [[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  echo "Error: --date must be YYYY-MM-DD. Got: $DATE"
+  exit 2
+fi
+
+if ! [[ "$RUN_ID" =~ ^run[0-9]{2,}$ ]]; then
+  echo "Error: --run-id must look like runNN (e.g., run06). Got: $RUN_ID"
+  exit 2
+fi
+
+# Find repo root by walking up to 07_system
+find_root() {
+  local dir="$PWD"
+  while true; do
+    if [ -d "$dir/07_system" ]; then
+      echo "$dir"
+      return 0
+    fi
+    if [ "$dir" = "/" ]; then
+      return 1
+    fi
+    dir="$(cd "$dir/.." && pwd)"
+  done
+}
+
+ROOT="$(find_root || true)"
+if [ -z "${ROOT:-}" ]; then
+  echo "Error: could not locate secondbrain root (expected 07_system directory above PWD)."
+  echo "Tip: cd ~/secondbrain and retry."
+  exit 1
+fi
+
+BASE="$ROOT/07_system/checkpoints/resume-factory"
+DIR_CHECKPOINTS="$BASE/checkpoints"
+DIR_LOGS="$BASE/logs"
+DIR_ANALYSIS="$BASE/analysis"
+DIR_ARCHIVES="$BASE/archives"
+LATEST="$BASE/LATEST.md"
+
+mkdir_cmd() {
+  local d="$1"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] mkdir -p \"$d\""
+  else
+    mkdir -p "$d"
+  fi
+}
+
+copy_cmd() {
+  local src="$1"
+  local dest="$2"
+  if [ -z "$src" ]; then
+    return 0
+  fi
+  if [ ! -f "$src" ]; then
+    echo "Error: source file not found: $src"
+    exit 1
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] cp \"$src\" \"$dest\""
+  else
+    cp "$src" "$dest"
+  fi
+}
+
+write_latest() {
+  local checkpoint_rel="$1"
+  local log_rel="$2"
+  local synth_rel="$3"
+  local archive_rel="$4"
+
+  local tmp="$ROOT/.rf_latest_tmp.md"
+
+  cat > "$tmp" <<EOF
+# LATEST (Resume Factory)
+
+Read order:
+1) CURRENT.md
+2) Latest checkpoint
+
+Files:
+- CURRENT: CURRENT.md
+- Checkpoint: $checkpoint_rel
+- Synthesis: $synth_rel
+- Log: $log_rel
+- Archive notes: $archive_rel
+EOF
+
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] write $LATEST"
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$LATEST"
+  fi
+}
+
+# Ensure folder scaffold exists
+mkdir_cmd "$DIR_CHECKPOINTS"
+mkdir_cmd "$DIR_LOGS"
+mkdir_cmd "$DIR_ANALYSIS"
+mkdir_cmd "$DIR_ARCHIVES"
+
+# Normalize destination names (canonical)
+DEST_LOG="$DIR_LOGS/${DATE}_${RUN_ID}_full-run-log.md"
+DEST_SYNTH="$DIR_ANALYSIS/${DATE}_${RUN_ID}_post-run_synthesis.md"
+DEST_ARCHIVE="$DIR_ARCHIVES/${DATE}_${RUN_ID}_archive-notes.md"
+DEST_CHECKPOINT="$DIR_CHECKPOINTS/${DATE}_checkpoint.md"
+DEST_CURRENT="$BASE/CURRENT.md"
+
+# Copy in provided artifacts (if flags supplied)
+copy_cmd "$LOG_SRC" "$DEST_LOG"
+copy_cmd "$SYNTH_SRC" "$DEST_SYNTH"
+copy_cmd "$ARCHIVE_SRC" "$DEST_ARCHIVE"
+copy_cmd "$CHECKPOINT_SRC" "$DEST_CHECKPOINT"
+copy_cmd "$CURRENT_SRC" "$DEST_CURRENT"
+
+# Rewrite LATEST.md deterministically (relative paths)
+REL_CHECKPOINT="checkpoints/${DATE}_checkpoint.md"
+REL_LOG="logs/${DATE}_${RUN_ID}_full-run-log.md"
+REL_SYNTH="analysis/${DATE}_${RUN_ID}_post-run_synthesis.md"
+REL_ARCHIVE="archives/${DATE}_${RUN_ID}_archive-notes.md"
+
+write_latest "$REL_CHECKPOINT" "$REL_LOG" "$REL_SYNTH" "$REL_ARCHIVE"
+
+echo "rf-checkpoint v0 complete."
+echo "Root: $ROOT"
+echo "LATEST: $LATEST"
+echo "Expected paths:"
+echo "  CURRENT:   $DEST_CURRENT"
+echo "  CHECKPOINT:$DEST_CHECKPOINT"
+echo "  SYNTHESIS: $DEST_SYNTH"
+echo "  LOG:       $DEST_LOG"
+echo "  ARCHIVE:   $DEST_ARCHIVE"
+if [ "$DRY_RUN" = "1" ]; then
+  echo "(dry-run mode: no files were written)"
+fi
+

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# rf-idea
+# Append a timestamped idea to the Resume Factory backlog ideas file.
+#
+# Usage:
+#   rf-idea "Add template auto-selection scoring"
+#   rf-idea Add template auto-selection scoring
+#
+# Writes to:
+#   ~/secondbrain/07_system/backlog/resume-factory/ideas.md
+
+ROOT="${SECOND_BRAIN_ROOT:-$HOME/secondbrain}"
+IDEAS_DIR="$ROOT/07_system/backlog/resume-factory"
+IDEAS_FILE="$IDEAS_DIR/ideas.md"
+
+if [ $# -lt 1 ]; then
+  echo "Usage: rf-idea \"<idea text>\""
+  exit 2
+fi
+
+IDEA_TEXT="$*"
+IDEA_TEXT_TRIMMED="$(printf "%s" "$IDEA_TEXT" | awk '{$1=$1}1')"
+
+if [ -z "$IDEA_TEXT_TRIMMED" ]; then
+  echo "Error: idea text cannot be empty."
+  exit 2
+fi
+
+mkdir -p "$IDEAS_DIR"
+
+TODAY="$(date +%Y-%m-%d)"
+NOW="$(date +%H:%M)"
+
+# If file doesn't exist, create a minimal header.
+if [ ! -f "$IDEAS_FILE" ]; then
+  cat > "$IDEAS_FILE" <<EOF
+# Resume Factory Backlog — Ideas
+
+Rules:
+- This file is aspirational: not truth, not commitments.
+- Promote items into CURRENT.md only when implemented and verified.
+EOF
+  printf "\n" >> "$IDEAS_FILE"
+fi
+
+# Ensure file ends with a newline (prevents header/bullet gluing).
+# If last byte is not newline, append one.
+if [ -s "$IDEAS_FILE" ]; then
+  last_char="$(tail -c 1 "$IDEAS_FILE" || true)"
+  if [ "$last_char" != $'\n' ]; then
+    printf "\n" >> "$IDEAS_FILE"
+  fi
+fi
+
+# Ensure there's a date header for today.
+if ! grep -q "^## $TODAY$" "$IDEAS_FILE"; then
+  printf "## %s\n" "$TODAY" >> "$IDEAS_FILE"
+fi
+
+ENTRY="- [$TODAY $NOW] $IDEA_TEXT_TRIMMED"
+
+# Record line number BEFORE append (so we can report exact inserted line).
+# Next line to be written is current line count + 1.
+LINE_NO="$(( $(wc -l < "$IDEAS_FILE") + 1 ))"
+
+printf "%s\n" "$ENTRY" >> "$IDEAS_FILE"
+
+echo "Added idea to: $IDEAS_FILE"
+echo "  Line: $LINE_NO"
+echo "  Entry: $ENTRY"
+

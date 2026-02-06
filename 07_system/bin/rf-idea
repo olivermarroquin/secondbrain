@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$HOME/secondbrain/01_projects/resume-factory/scripts/rf-idea" "$@"

@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# rf-context
+# Print deterministic Resume Factory context in the correct read order.
+#
+# Usage:
+#   rf-context
+#   rf-context --full
+#
+# Output order:
+#   1) 01_projects/resume-factory/CONTEXT.md
+#   2) 07_system/checkpoints/resume-factory/LATEST.md
+#   3) 07_system/checkpoints/resume-factory/CURRENT.md
+
+LINES_DEFAULT=120
+LINES_FULL=600
+
+MODE="default"
+if [ "${1:-}" = "--full" ]; then
+  MODE="full"
+elif [ "${1:-}" != "" ]; then
+  echo "Usage: rf-context [--full]"
+  exit 2
+fi
+
+# Resolve repo root by walking up until we find 07_system
+find_root() {
+  local start="$PWD"
+  local dir="$start"
+  while true; do
+    if [ -d "$dir/07_system" ]; then
+      echo "$dir"
+      return 0
+    fi
+    if [ "$dir" = "/" ]; then
+      return 1
+    fi
+    dir="$(cd "$dir/.." && pwd)"
+  done
+}
+
+ROOT="$(find_root || true)"
+if [ -z "${ROOT:-}" ]; then
+  echo "Error: could not locate secondbrain root (expected a 07_system directory somewhere above PWD)."
+  echo "Tip: cd ~/secondbrain and retry."
+  exit 1
+fi
+
+CONTEXT_FILE="$ROOT/01_projects/resume-factory/CONTEXT.md"
+LATEST_FILE="$ROOT/07_system/checkpoints/resume-factory/LATEST.md"
+CURRENT_FILE="$ROOT/07_system/checkpoints/resume-factory/CURRENT.md"
+
+require_file() {
+  local f="$1"
+  if [ ! -f "$f" ]; then
+    echo "Error: missing required file: $f"
+    exit 1
+  fi
+}
+
+require_file "$CONTEXT_FILE"
+require_file "$LATEST_FILE"
+require_file "$CURRENT_FILE"
+
+LINES="$LINES_DEFAULT"
+if [ "$MODE" = "full" ]; then
+  LINES="$LINES_FULL"
+fi
+
+print_block() {
+  local title="$1"
+  local path="$2"
+  echo "===== $title ====="
+  echo "PATH: $path"
+  echo "-----"
+  # Use sed for predictable line ranges on macOS (BSD sed)
+  sed -n "1,${LINES}p" "$path"
+  echo
+}
+
+echo "### Resume Factory Context Bundle"
+echo "Generated: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "Root: $ROOT"
+echo "Mode: $MODE (lines per file: $LINES)"
+echo
+
+print_block "CONTEXT.md" "$CONTEXT_FILE"
+print_block "LATEST.md" "$LATEST_FILE"
+print_block "CURRENT.md" "$CURRENT_FILE"
+
+echo "### End Context Bundle"
+

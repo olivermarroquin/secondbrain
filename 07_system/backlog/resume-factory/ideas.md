@@ -167,6 +167,10 @@ Ideas for Enhancement:
     
     - The system should support an explicit incremental base so repeated runs can accumulate safely.
 
+--------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------------
+
+Refactoring the entire system to be used for multiple job families, not just QA Automation Engineer.
 
 --------------------------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -474,3 +478,11 @@ Ideas for Enhancement:
         - Print it during `resume-suggest-edits --diff` so you can see “this edit is in Job #2, R&R #1”
         
         But we do this **after** term filtering + prompt tightening, otherwise you’ll just get better-labeled garbage.
+
+## 2026-02-06 
+- [10:18] Test idea entry from rf-idea v0 (fixed in the second run)
+
+## 2026-02-06
+- [2026-02-06 10:26] Second test entry — should show date + line number
+
+- [2026-02-06 11:07] Shim test entry

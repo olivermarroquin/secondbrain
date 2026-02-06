@@ -2,6 +2,12 @@
 
 This document defines how system truth, change history, logs, and future ideas are structured and consumed by AI tools operating in the CLI.
 
+## Operator Helpers (07_system/bin)
+- rf-context: print resume-factory context in the correct read order
+- rf-checkpoint: create/update CURRENT + checkpoint + LATEST bundle after a run
+- rf-idea: append an idea to backlog/resume-factory/ideas.md with timestamp
+
+
 Goal
 
 Make AI tools running in your CLI:
