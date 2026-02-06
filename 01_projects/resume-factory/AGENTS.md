@@ -1,0 +1,1 @@
+This file defines roles and how they collaborate (critic, implementer, tester). It keeps your “multi-model” setup from becoming chaos.
