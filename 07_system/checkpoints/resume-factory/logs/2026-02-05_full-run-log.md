@@ -1,5 +1,299 @@
-- Golden Run Checklist (Job #1 end-to-end, “golden run”)
-    
+Below the Post-Run Synthesis is a End-to-End flow of how Resume-factory currently works
+
+- Post-run Synthesis of today’s Resume Factory executions (From Chat That helped Me Execute this Day)
+    - SECTION 1 — What Was Executed
+        
+        ### End-to-end workflows actually run
+        
+        You executed **real, production** runs of the job pipeline with these phases exercised in practice:
+        
+        1. **Intake (create job app folder + tracking + JD capture)**
+            - Created job folders under `01_projects/jobs/qa_automation_engineer/<company>/<date_role>/`
+            - Captured JDs (stdin paste and later file/pipe workaround)
+            - Wrote tracking artifacts (`application-record.json`, `job-meta.json`, `status-history.md`)
+            - Committed/pushed intake artifacts
+        2. **Resume generation (template selection → edit proposals → apply edits → produce resume.docx)**
+            - Auto-selected templates per job (multiple templates used across jobs)
+            - Ran `resume-suggest-edits` with gate/missing-only logic
+            - Applied edits with `resume-approve-edits` to produce `resume_refs/resume.docx`
+            - Opened generated resumes (LibreOffice), and in some cases **manually edited** post-generation
+        3. **Application batch flow (open URLs → apply in browser → mark applied in repo)**
+            - Used batch queue generation (`jobs-apply-batch`) to open URLs and write `/tmp/applied-YYYY-MM-DD-batchN.txt`
+            - Marked applied using both:
+                - `jobs-mark-applied-last` (queue-driven; supports `-push`)
+                - `jobs-batch-mark-applied` (path-file driven; does **not** support `-push`)
+            - Verified state via `jobs-list-unapplied`
+        4. **Session hygiene**
+            - `session-start` / `session-close`
+            - Post-run commits and pushes to keep repo clean
+        
+        ### Commands / scripts exercised
+        
+        **Core resume-factory / jobs pipeline commands used for real:**
+        
+        - `job-intake-one`
+        - `job-intake-commit`
+        - `jobs-list-unapplied`
+        - `resume-select`
+        - `resume-preview`
+        - `resume-suggest-edits`
+        - `resume-approve-edits`
+        - `jobs-apply-batch`
+        - `jobs-queue-show`
+        - `jobs-mark-applied-last`
+        - `jobs-batch-mark-applied`
+        - `session-start`, `session-close`
+        
+        ### System surfaces actually tested
+        
+        - **STDIN ingestion path** (and its failure modes)
+        - **JD term extraction + gating** (including “missing-only” logic)
+        - **Template scoring + selection**
+        - **Proposal generation + safety drops**
+        - **Edit application mechanics** (REPLACE_LINE, REPLACE_PHRASE)
+        - **Queue file semantics** for applied batches (creation, reuse, selection)
+        - **Tracking file coherence** across `application-record.json` vs `job-meta.json` vs `status-history.md`
+        - **LibreOffice interaction artifacts** (lock files, saving behavior)
+        
+        ---
+        
+    - SECTION 2 — Current Condition of Resume Factory
+        
+        ### Worked reliably
+        
+        - **Job folder scaffolding**: intake creates the right structure consistently.
+        - **Commit/push discipline**: the workflow supported frequent commits without fighting Git.
+        - **Template selection**: generally reasonable matches when JD terms overlapped expected stacks. (but needs some work still)
+        - **Proposal application**: when proposals were produced, `resume-approve-edits` applied them deterministically and reported success/failure clearly.
+        - **Applied-state reporting**: `jobs-list-unapplied` reliably reflected the *repo state* (once the metadata was corrected).
+        
+        ### Worked but felt fragile / awkward
+        
+        - **STDIN paste into `job-intake-one`**: paste sometimes “froze” mid-text and prevented additional typing, forcing aborts and rework.
+        - **Batch application UX**: the relationship between:
+            - queue files (`/tmp/applied-*`)
+            - “batch number” vs “count”
+            - `jobs-mark-applied-last` vs `jobs-batch-mark-applied`
+                
+                created cognitive load and misfires.
+                
+        - **Repeated runs of `resume-suggest-edits`**: output quality and gating logic produced surprising behavior (edits disappear/reappear between runs depending on what the system believes is “missing”).
+        
+        ### Required manual intervention
+        
+        - **LibreOffice manual edits** to finalize resumes (post `resume-approve-edits`).
+        - **Handling LibreOffice lock files**:
+            - lock files were tracked at one point → had to remove from index + add ignore rule.
+        - **Correcting incorrect applied states**:
+            - manual JSON edits were needed initially
+            - later corrected properly once `job-meta.json` was identified as the driver for `jobs-list-unapplied`.
+        - **Workarounds for stdin paste failures**:
+            - writing JD to `/tmp/*.txt` and piping into intake. Using -- source clipboard also worked well for this issue.
+        
+        ### System surprises (good/bad)
+        
+        **Good surprises**
+        
+        - The “missing-only gate” behavior prevented a lot of unnecessary edits once terms were “present”. Even though some random unnecessary words would still pass through
+        - Safety drops avoided obvious destructive edits (headers, role lines, headings) and duplicates.
+        
+        **Bad surprises**
+        
+        - Marking “applied” is not a single source of truth: **job-meta status** and **application-record status** can diverge and the system will behave based on whichever a command uses.
+        - Batch queue numbering drifted (`batch1`, `batch2`, `batch3`…) and accidentally targeting the wrong job became easy.
+        - Some JD term extraction produced low-signal or wrong terms (e.g., “az/mst”, “and/or”, “c2h”, “database/sql”), leading to awkward resume edits.
+        - Missing-only gate:  Would have liked to see a lot more words in there that didn’t make it through even though the resume didn’t mention them example “qTest”, not in resume but still didn’t make it to the list of jd terms in any list.
+        
+        ---
+        
+    - SECTION 3 — Key Learnings From the Runs
+        
+        ### Expected vs actual behavior mismatches
+        
+        - **“Applied” state is not unified**:
+            - You updated `application-record.json` to `not_applied` and saw *no change* because `jobs-list-unapplied` was driven by `job-meta.json.status`.
+            - Real fix required updating **both** or making commands reference a single canonical source.
+        - **Repeated `resume-suggest-edits` isn’t additive** in the way an operator expects:
+            - Each run generates a new `edit-proposals.json`, and depending on gating logic, previously proposed edits may not reappear even if you want to “merge” them into a better combined edit.
+        - **`resume-approve-edits` writes a fresh resume.docx**:
+            - Operationally, it behaves like “generate from template + apply selected proposals”, not “patch the current resume.docx”, which clashes with manual-edit workflows.
+        
+        ### Highest friction / cognitive load steps
+        
+        - **Paste-to-stdin capture**: unpredictable terminal behavior forced resets and alternate methods.
+        - **Batch apply flow**: knowing which command opens which URL, and why it opened the “wrong one”, required reasoning about queue files and selection logic rather than intent.
+        - **State reconciliation**: knowing which file(s) determine applied/not_applied required investigation (job-meta vs application-record vs status-history).
+        
+        ### Missing guardrails / validations
+        
+        - No “single command” to **revert applied → not_applied** safely across all tracking files (you had to do it manually).
+        - No validation that `job-meta.json.status` matches `application-record.json.current_status` (drift happened).
+        - No batch tooling that forces an explicit target selection (by index or app path) before opening URLs.
+        
+        ### Operator discipline > tooling
+        
+        - Correct results depended on you:
+            - clearing stale `/tmp/applied-*` queues
+            - committing/pushing at the right points
+            - manually fixing metadata drift
+            - avoiding editing the generated resume in ways that conflict with re-generation
+        - The system is usable now, but it demands high attention because **mistakes look like “the tool is wrong” when it’s really “the state is ambiguous.”**
+        
+        Another friction area was that there was still so much manual work done by me in the entire process. It takes a lot longer and results (suggestions) aren’t as great or worth it. Higher level automations (possibly using agents) would help immensely.
+        
+        ---
+        
+    - SECTION 4 — Limitations Discovered
+        
+        ### Structural limitations
+        
+        - **Multiple sources of truth for status** (`job-meta.json`, `application-record.json`, `status-history.md`) without enforced coherence.
+        - **Resume generation baseline is the template**, not the last generated resume; this prevents iterative “patching” without losing prior manual edits.
+        
+        ### Workflow limitations
+        
+        - Batch flow is **queue-file centric**; operator intent is “open job X”, but tooling is “open the next N not_applied jobs”, which is error-prone when the list order isn’t the mental model.
+        - Re-running suggestions to “get more keywords” is constrained by gating logic and unsafe-drop logic; it’s not designed for “progressive refinement”.
+        
+        ### CLI UX limitations
+        
+        - `jobs-open` doesn’t exist; opening a specific job requires calling batch tools or manually opening URLs.
+        - Inconsistent flags across commands (`-push` exists in one place but not another) created confusion mid-run.
+        - Stdin capture has a failure mode that feels like the CLI “hangs” with no actionable guidance.
+        
+        ### Automation limits / scaling risk
+        
+        If you tried to run 20 jobs today with the current setup:
+        
+        - Status drift would compound quickly.
+        - Queue confusion would cause mis-targeted applications.
+        - JD term extraction noise would amplify low-quality edits, creating more manual cleanup.
+        - Re-running suggestions would waste time because it’s not reliably incremental.
+        
+        ---
+        
+    - SECTION 5 — Recommended Enhancements
+        
+        ### P0 — Must-fix before running 20 jobs
+        
+        1. **Unify status source of truth**
+            - Problem: status drift between `job-meta.json` and `application-record.json` breaks trust in `jobs-list-unapplied`.
+            - Applies to: tracking schema + all `jobs-*` commands that read/write status.
+            - Change size: **medium** (schema decision + update readers/writers + migration script).
+            - Concrete: pick canonical status (likely `job-meta.json.status`), and have other files derived or auto-updated.
+        2. **Add a safe “revert applied” command**
+            - Problem: manual JSON edits are risky and incomplete; you already hit this.
+            - Applies to: new CLI command (e.g., `jobs-status-set --app ... --status not_applied --note ...`) or `jobs-mark-not-applied`.
+            - Change size: **small/medium**.
+            - Concrete: update `job-meta.json`, `application-record.json`, append to `status-history.md`, clear `date_applied`.
+        3. **Batch selection must be explicit**
+            - Problem: “batch auto” opened the wrong job because selection was list-driven.
+            - Applies to: `jobs-apply-batch` UX.
+            - Change size: **medium**.
+            - Concrete: allow `jobs-apply-open --app <path>` and/or `jobs-apply-batch --pick <index|company>` that prints the candidate list and requires confirmation.
+        4. **Fix stdin ingestion reliability**
+            - Problem: terminal paste freezing forced workarounds.
+            - Applies to: `job-intake-one` stdin reader or terminal handling instructions.
+            - Change size: **small** if solved by code (read loop), **small** if solved by documented recommended path (clipboard/file).
+            - Concrete: support `-source clipboard` (pbpaste) and `-source file:/path` as first-class paths; recommend against interactive paste.
+        
+        ### P1 — High-leverage quality / reliability improvements
+        
+        1. **Make resume generation incremental-aware**
+            - Problem: re-running `resume-approve-edits` regenerates from template; manual edits get overridden.
+            - Applies to: `resume-approve-edits`.
+            - Change size: **structural adjustment**.
+            - Concrete options (not a redesign):
+                - add `-base resume_refs/resume.docx` to apply proposals onto the current generated resume
+                - or persist “applied proposals” and reapply cumulatively when regenerating
+        2. **Improve JD term extraction quality**
+            - Problem: noisy terms (“and/or”, “az/mst”, “c2h”, “database/sql”) degrade proposal quality.
+            - Applies to: `rf_jd_terms.py`.
+            - Change size: **small/medium**.
+            - Concrete: hard filters for timezones/locations conjunctions, normalize “C2H” to “contract-to-hire” (or drop), split/normalize “database/sql” into `sql`, and add a “low-signal term” suppress list.
+        3. **Proposal quality controls**
+            - Problem: awkward phrasing (“integrating C2H methodologies”) and forced keyword insertion.
+            - Applies to: proposal generator prompting rules + validator.
+            - Change size: **medium**.
+            - Concrete: add rules: “never invent process terms; prefer natural phrasing; avoid location/timezone terms; don’t add meaningless ‘methodologies’”.
+        4. **Command flag consistency**
+            - Problem: `-push` exists in one status command but not another, causing errors and mid-run confusion.
+            - Applies to: `jobs-mark-applied-last`, `jobs-batch-mark-applied`.
+            - Change size: **small**.
+            - Concrete: standardize: either both support `-push`, or neither and the workflow always ends with `git push`.
+        5. **Queue file ergonomics**
+            - Problem: multiple `/tmp/applied-*batchN.txt` accumulates; wrong queue used.
+            - Applies to: `jobs-apply-batch` and queue tools.
+            - Change size: **small**.
+            - Concrete: write queue files to a deterministic path per date+batch, and add `jobs-queue-ls --date` / `jobs-queue-pick`.
+        
+        ### P2 — Can wait, but we can do soon
+        
+        1. **Auto-detect LibreOffice lock files and prevent tracking**
+            - Problem: lock artifacts contaminated repo once.
+            - Applies to: repo hygiene tooling.
+            - Change size: **small** (pre-commit hook or `session-close` check).
+            - Concrete: add a `session-close` warning if `.~lock.*#` exists anywhere.
+        2. **Add a “jobs-open-url” convenience command**
+            - Problem: operator wants “open this job now” without batch semantics.
+            - Applies to: jobs CLI.
+            - Change size: **small**.
+            - Concrete: `jobs-open --app <path>` that reads `jd/job-post-url.txt` and opens it.
+        
+        ---
+        
+    - SECTION 6 — How AI-in-CLI Will Improve This System
+        
+        ### Continuous codebase access improves fix quality
+        
+        Today’s failures were **stateful, multi-file, and workflow-dependent**. AI with repo access can:
+        
+        - trace which commands read which files (e.g., why `jobs-list-unapplied` ignored `application-record.json`)
+        - find inconsistent flag behavior across commands quickly
+        - implement changes consistently across all entrypoints without missing one path
+        
+        ### Why AI-assisted step-by-step changes are safer than manual edits
+        
+        You already experienced that “fixing it manually” led to partial correction until you discovered the real driver file. AI-in-CLI can:
+        
+        - add validations that prevent partial edits from being accepted
+        - run local checks after each patch (unit-ish checks + end-to-end dry runs)
+        - enforce deterministic diffs and reduce accidental drift
+        
+        ### Problem categories AI is especially suited to (based on today)
+        
+        - **Edge case hunting**: stdin paste freeze, queue-file mismatch, status drift
+        - **Consistency enforcement**: unify flags, unify status handling
+        - **Refactor-with-constraints**: incremental resume base support without redesign
+        - **Invariant checks**: “these three tracking files must agree” assertions
+        - **Prompt/schema tightening**: stop low-quality keyword stuffing and banned-term injection
+        
+        ---
+        
+    - SECTION 7 — Where AI Should Focus First (Top 5)
+        1. **Status source-of-truth + drift prevention**
+            - Targets: `jobs-list-unapplied`, `jobs-mark-applied-last`, `jobs-batch-mark-applied`, tracking writers
+            - Goal: single canonical status + automatic coherence updates
+        2. **Add `jobs-status-set` (or `jobs-mark-not-applied`)**
+            - Targets: new command + shared status mutation utility
+            - Goal: safe reversible status transitions with consistent history logging
+        3. **`jobs-apply-batch` selection + queue UX**
+            - Targets: batch selection logic, queue file naming, `jobs-queue-show`/`jobs-queue-*`
+            - Goal: prevent wrong-job opens and make intent-driven targeting trivial
+        4. **STDIN ingestion + alternative sources for intake**
+            - Targets: `job-intake-one` input reader + add first-class `clipboard` / `file` sources
+            - Goal: eliminate terminal paste freeze class entirely
+        5. **JD term extraction + proposal quality controls**
+            - Targets: `rf_jd_terms.py`, proposal schema/prompt rules, unsafe-drop reasons
+            - Goal: stop garbage terms and awkward edits; improve “keyword alignment” without degrading language quality
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+
+- Golden Run Checklist (Job #1-6 end-to-end, insightful “golden run”)
     <aside>
     🎙️
     

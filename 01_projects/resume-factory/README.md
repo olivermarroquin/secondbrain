@@ -1,4 +1,7 @@
-✅ Summary: Checkpoint & Context Re-organization for AI-in-CLI
+# AI-in-CLI Context & Checkpoints Setup
+
+This document defines how system truth, change history, logs, and future ideas are structured and consumed by AI tools operating in the CLI.
+
 Goal
 
 Make AI tools running in your CLI:
