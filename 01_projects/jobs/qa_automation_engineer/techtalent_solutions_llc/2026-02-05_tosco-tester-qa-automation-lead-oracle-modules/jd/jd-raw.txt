@@ -1,0 +1,34 @@
+Job Details
+Skills
+Oracle ERP
+TOSCA
+Summary
+Job Title: TOSCA Tester /QA automation Lead Oracle Modules
+Location: 100% Remote
+Mode: Fulltime
+
+Must Have: Oracle ERP
+
+Job Description:
+
+We are seeking an experienced TOSCA Automation Lead/ Engineer with strong expertise in Oracle applications to join our QA automation team. The ideal candidate will be responsible for designing, developing, and maintaining automated test solutions using Tricentis TOSCA, ensuring high-quality delivery of Oracle implementations.
+
+Key Responsibilities:
+
+Design, develop, and execute automation test scripts using Tricentis TOSCA
+Collaborate with business analysts, developers, and QA teams to understand requirements
+Maintain and enhance existing automation frameworks
+Perform test data management and test execution reporting
+Identify, log, and track defects using standard defect management tools
+Support CI/CD integration for automated test execution
+Ensure best practices in test automation and QA processes
+Required Skills & Qualifications:
+
+Strong hands-on experience with Tricentis TOSCA
+Experience testing Oracle (ERP,Financials, SCM, HCM, or related modules)
+Solid understanding of QA methodologies and SDLC
+Ability to work independently in a remote environment
+Good communication and documentation skills
+Nice to Have:
+
+TOSCA Certification
