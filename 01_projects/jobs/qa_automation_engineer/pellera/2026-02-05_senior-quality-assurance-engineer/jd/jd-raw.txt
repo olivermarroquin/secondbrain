@@ -1,0 +1,96 @@
+Job Details
+Skills
+Artificial Intelligence
+Testing
+Test Suites
+Collaboration
+Reporting
+Mentorship
+Analytical Skill
+Problem Solving
+Conflict Resolution
+Bug Tracking
+JIRA
+Bugzilla
+Programming Languages
+Java
+Python
+C#
+Version Control
+Git
+Quality Assurance
+Orchestration
+Docker
+Kubernetes
+Communication
+Management
+Organizational Skills
+Critical Thinking
+Computer Science
+Software Quality Assurance
+Test Cases
+TestRail
+Zephyr
+API QA
+POSTMAN
+Mobile Testing
+Appium
+Automated Testing
+Selenium
+TestNG
+JUnit
+Continuous Delivery
+Jenkins
+GitLab
+Continuous Integration
+CircleCI
+Security QA
+Summary
+Practice/Department: Artificial Intelligence
+
+Position Title: Senior Quality Assurance Engineer
+
+Job Family: Services
+
+Position Location: Remote
+
+Reports to: Manager
+
+Job Summary:
+
+The Senior Quality Assurance Engineer role designs and develops robust, scalable automated test frameworks and test suites, leading the planning and execution of automated tests, and collaborating with developers and QA engineers to identify and report bugs. The role also includes continuously improving testing strategies, integrating testing into the CI/CD pipeline, analyzing test results, and mentoring junior engineers.
+
+Essential Functions:
+Design and develop robust, scalable, and efficient automated test frameworks and test suites.
+Lead the planning, creation, and execution of automated tests for new features and enhancements.
+Collaborate with software developers and other QA engineers to identify, reproduce, and report bugs and errors.
+Continuously improve automated testing strategies and tools to enhance test efficiency and reliability.
+Integrate automated testing into the CI/CD pipeline to ensure consistent and reliable software delivery.
+Analyze test results, document test reports, and track quality assurance metrics.
+Mentor junior engineers and provide guidance on best practices in automated testing.
+Stay updated with the latest industry trends in test automation and software quality assurance.
+Other duties as assigned.
+
+Required Skills/Abilities/Competencies
+Strong analytical and problem-solving skills.
+Proficiency in bug tracking tools like JIRA or Bugzilla.
+Familiarity with mobile testing tools like Appium or Espresso.
+Proficient in one or more programming languages such as Java, Python, or C#.
+Familiarity with version control systems like Git.
+Strong understanding of software QA methodologies, tools, and processes.
+Knowledge of containerization and orchestration technologies (Docker, Kubernetes) is a plus.
+Excellent verbal and written communication skills.
+Ability to work effectively in a team environment as well as independently.
+Strong time management and organizational skills.
+A proactive approach to tackling challenges and improving processes.
+Ethical and critical thinking.
+
+Education and Experience:
+Bachelor's degree in Computer Science, Engineering, or related field.
+Minimum of 5 years of experience in software quality assurance, with at least 3 years focused on test automation.
+In-depth experience with test case management tools such as TestRail or Zephyr.
+Experience with API testing tools such as Postman or Swagger.
+Familiarity with mobile testing tools like Appium or Espresso.
+Extensive experience with automated testing frameworks and tools like Selenium, TestNG, JUnit, or similar.
+Experience with CI/CD tools such as Jenkins, GitLab CI, or CircleCI.
+Experience with performance and/or security testing is highly desirable.
