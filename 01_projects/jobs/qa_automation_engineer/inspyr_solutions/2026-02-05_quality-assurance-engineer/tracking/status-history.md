@@ -7,3 +7,4 @@
 
 ## 2026-02-05
 - Application submitted
+- Applied via Dice on 2026-02-05. Role is Tosca-heavy; resume aligned but low Tosca depth.
