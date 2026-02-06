@@ -1,0 +1,42 @@
+Job Details
+Skills
+QA
+Quality Assurance
+Test
+E-commerce
+Magento
+Adobe Commerce Cloud
+Manual
+Automated
+Test Automation
+Alpine.js
+Tailwind CSS
+API
+Database
+Functional
+Regression
+Integration
+UAT
+ERP
+CRM
+WMS
+Summary
+Our East Coast based client is seeking a fully remote Consulting QA / Test Engineer with E-commerce platform experience, preferably Magento / Adobe Commerce Cloud. The Consulting QA / Test Engineer will work independently and be responsible for, and not limited to: Manual and Automated testing of E-Commerce features, enhancements, and bug fixes; validating front end functionality across browsers and devices; testing UI behavior / interactions with Alpine.js; validating layouts and styling responsiveness implemented with Tailwind CSS; verifying E-Commerce workflows (catalog browsing, search, cart, checkout, customer accounts, promotions); verifying Admin Workflows (product, pricing, promotions, orders, inventory, customer management, and system configuration); identifying, documenting, and tracking defects with clear reproduction steps, screenshots, and logs; testing API Integrations (REST / SOAP / GraphQL); E-Commerce Storefront workflows (checkout, payment processing, shipping, taxes, etc.); testing integrations with ERP, CRM, WMS, Payment Gateways, and Customer Experience Platforms; executing Performance / Load testing.
+
+To be considered for this project, you must have:
+
+Manual and Automated testing of E-Commerce features, enhancements, and bug fixes; validate front-end functionality across browsers and devices
+Experience with testing API Integrations (REST / SOAP / GraphQL),
+Experience using defect tracking and test management tools such as Jira, TestRail, etc.
+Ability to test UI behavior / interactions with Alpine.js; validate layouts and styling responsiveness implemented with Tailwind CSS; verify E-Commerce workflows (catalog browsing, search, cart, checkout, customer accounts, promotions)
+Experience testing integrations with ERP, CRM, WMS, Payment Gateways, and Customer Experience Platforms
+Working knowledge of GIT and other collaborative development tools
+Ability to effectively write queries in SQL to validate data
+Experience verifying Admin Workflows (product, pricing, promotions, orders, inventory, customer management, and system configuration); identifying, documenting, and tracking defects with clear reproduction steps, screenshots, and logs
+Strong verbal and written communication (focus on documentation) and interpersonal skills, with a proven ability to work effectively with cross functional teams as well as independently as an individual contributor
+Nice to have:
+
+Experience developing QA Plan (Requirements Analysis, Test Planning, Test Case Development, Environment Setup, Test Execution, Test Cycle Closure)
+Experience with Automated testing tools (Cypress, Playwright, Selenium)
+Exposure to Agile / Scrum software development
+Experience with Magento Commerce Cloud
