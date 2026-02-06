@@ -1,0 +1,49 @@
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODEL=""
+WITH_CONTEXT="0"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) MODEL="${2:-}"; shift 2 ;;
+    --with-context) WITH_CONTEXT="1"; shift ;;
+    *) echo "Usage: rf-prompt [--model claude|openai|gemini] [--with-context]"; exit 2 ;;
+  esac
+done
+
+ROOT="$HOME/secondbrain"
+PROMPT_FILE="$ROOT/01_projects/resume-factory/AGENT_PROMPT.md"
+
+if [ ! -f "$PROMPT_FILE" ]; then
+  echo "Error: missing $PROMPT_FILE"
+  exit 1
+fi
+
+if [ "$WITH_CONTEXT" = "1" ]; then
+  echo "### AUTHORITATIVE CONTEXT (rf-context --full)"
+  "$ROOT/07_system/bin/rf-context" --full
+  echo
+fi
+
+case "$MODEL" in
+  claude)
+    echo "### MODEL HEADER (Claude)"
+    echo "Be conservative. Prefer small diffs. Ask for verification before expanding scope."
+    echo
+    ;;
+  openai)
+    echo "### MODEL HEADER (OpenAI)"
+    echo "Be deterministic. Propose exact diffs. Minimize edits."
+    echo
+    ;;
+  gemini)
+    echo "### MODEL HEADER (Gemini)"
+    echo "Act as Critic by default. Identify risks and missing constraints."
+    echo
+    ;;
+esac
+
+cat "$PROMPT_FILE"
+
