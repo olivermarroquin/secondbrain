@@ -1,0 +1,55 @@
+Job Details
+Skills
+QUALITY ASSURANCE ENGINEER
+SOFTWARE QUALITY ASSURANCE
+AGILE QA
+QA ENGINEER
+QA
+TOSCA
+TRICENTIS TOSCA
+MANUAL TESTING
+UI TESTING
+API TESTING
+AZURE DEVOPS
+QTEST
+TEST PLANNING
+SQL
+ISTQB
+AUTOMATION
+Summary
+Title: Quality Assurance Engineer
+ Location: Remote (EST Hours)  
+Duration: 6 Month Contract to Hire
+Compensation: $40-46/HR Contract, Conversion Target: $100-$115K
+Work Requirements: , Holder
+
+Job Description:
+Job Summary
+We are seeking a Senior Quality Engineer with strong hands-on experience in Tosca automation and manual testing. This role focuses on designing and executing robust test coverage across UI, APIs, and data, while partnering closely with Product Owners and development teams to ensure quality delivery.
+
+Key Responsibilities
+Design, create, execute, and maintain manual and automated test cases aligned to acceptance criteria.
+Develop, enhance, and optimize Tosca automation frameworks and reusable modules.
+Execute functional, regression, API, database, and performance tests.
+Own regression test strategy and coverage for assigned applications.
+Validate backend services, integrations, and complex data flows.
+Manage test planning, execution, and reporting using qTest.
+Log, triage, and validate defects using Azure DevOps.
+Provide test estimates, risk assessments, and quality recommendations.
+Act as a QA point of contact within Agile teams.
+Participate in and contribute to Agile ceremonies.
+Deliver clear test metrics, status reporting, and release readiness assessments.
+
+Required Qualifications
+6–9 years of experience in software quality assurance with strong automation and manual testing focus.
+Strong hands-on expertise with Tricentis Tosca.
+Experience with Azure DevOps and qTest.
+Strong understanding of Agile, SDLC, and QA best practices.
+Solid SQL skills for complex data validation.
+Working knowledge of performance testing execution.
+Strong communication and collaboration skills.
+
+Preferred Qualifications
+Tosca certifications.
+ISTQB certification.
+Extensive experience testing APIs and backend services.
