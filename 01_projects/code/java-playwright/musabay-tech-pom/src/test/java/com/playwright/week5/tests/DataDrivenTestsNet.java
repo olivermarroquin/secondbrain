@@ -15,6 +15,9 @@ public class DataDrivenTestsNet extends Base {
 
 	private static final Logger log = LoggerFactory.getLogger(Base.class);
 
+	//This is a method returning a 2-dimensional array object
+	//You can create multiple DataProvider readers reading different excel spreadsheets so it asks for the name of this unique excel file.
+	//For this, you import testNG 'DataProvider' and your ExcelManager class
 	@DataProvider(name = "MortgageTestDataSet1")
 	private Object[][] getCalculatorData() {
 		Object[][] data = null;
@@ -24,6 +27,7 @@ public class DataDrivenTestsNet extends Base {
 		return data;
 	}
 
+	// 
 	@Test(dataProvider = "MortgageTestDataSet1")
 	public void buyASingleHouseTest(String mortgageAmount, String mortgagePeriodYear, String mortgagePeriodMonth,
 			String intYear, String intMonth, String intType, String intRate, String startMonth, String startYear,

@@ -21,6 +21,7 @@ public class ExcelManager {
 	private static Workbook wb;
 	private static Sheet sh;
 
+	//This is a constructor
 	public ExcelManager(String excelFile, String sheetName) {
 		try {
 			File excelDataFile = new File(excelFile);
@@ -34,7 +35,8 @@ public class ExcelManager {
 			log.error("Error: " + e);
 		}
 	}
-
+	
+	//This method is for when you want to read a specific cell value like row 3, column D
 	public String readExcelDataCell(int rowIndex, int colIndex) {
 		String cellData = null;
 
@@ -52,7 +54,7 @@ public class ExcelManager {
 			Iterator<Row> iterator = sh.iterator();
 			Row tempRow = sh.getRow(0);
 			if (tempRow != null) {
-				int totalCols = tempRow.getPhysicalNumberOfCells();
+				int totalCols = tempRow.getPhysicalNumberOfCells();  //this will get only the columns that have data, not all of them, would be infinite
 				int totalRows = sh.getPhysicalNumberOfRows();
 				arrayExcelData = new String[totalRows - 1][totalCols];
 
@@ -117,6 +119,7 @@ public class ExcelManager {
 		return workbook;
 	}
 
+	//Always declare these helper methods private, designed to be used by this class only.
 	private String formatDataCellToString(Cell cell) {
 
 		String cellString = null;
@@ -131,16 +134,20 @@ public class ExcelManager {
 
 	
 	public static void main(String[] args) {
-		
+
+		// pass the excelFile path and the sheet name (tab at bottom of excel file)
 		ExcelManager myManager = new ExcelManager(
 				"src/test/resources/testdata/CalculaterTestData2.xlsx", "MortgageData1");
-		//String data =  myManager.readExcelDataCell(3, 3);
+		String data =  myManager.readExcelDataCell(3, 3);
 		//String data2 =  myManager.readExcelDataCell(0, 4);
 		
 		//System.out.println("Cell 3,3 data is: " + data);
 		//System.out.println("Cell 0,4 data is: " + data2);
 		
 		// reading whole excel file in 2 dimensional array
+
+		//ExcelManager myManager = new ExcelManager(
+		//	"src/test/resources/testdata/CalculaterTestData-old.xls", "MortgageData");
 		
 		System.out.println("data: --------\n" + myManager.getExcelData());
 		
