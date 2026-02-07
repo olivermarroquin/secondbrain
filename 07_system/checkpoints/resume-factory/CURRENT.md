@@ -40,7 +40,7 @@ Source options: `stdin`, `clipboard`, `url`, `file:<path>`
 |---------|---------|
 | `resume-select --app <path>` | Score templates against JD, show best pick |
 | `resume-preview --app <path>` | Show template info, JD stats, keyword hits |
-| `resume-suggest-edits --app <path> --diff` | Generate edit proposals, write edit-proposals.json |
+| `resume-suggest-edits --app <path> --diff` | Generate edit proposals + narrative, write edit-proposals.json |
 | `resume-approve-edits --app <path> --force --open` | Apply proposals, write resume.docx |
 | `resume-approve-edits --app <path> --numbers 1 3 5` | Apply selected proposals only |
 
@@ -131,6 +131,7 @@ session-close
 |-------|--------|
 | Suggestion re-runs not additive | Prior approved edits lost on regeneration |
 | JD term noise | Terms like "az/mst", "and/or", "c2h" pass through |
+| LLM proposal quality drift | Chat-style narrative may suggest low-signal edits without tighter JD term suppression |
 | Inconsistent `-push` flag | `jobs-mark-applied-last` has it; `jobs-batch-mark-applied` does not |
 | No `jobs-open --app` | Must use manual `open $(cat ...)` workaround |
 

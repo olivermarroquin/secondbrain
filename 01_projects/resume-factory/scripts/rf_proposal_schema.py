@@ -18,7 +18,7 @@ class Proposal:
 def _die(msg: str) -> Tuple[bool, str]:
     return False, msg
 
-def validate_proposals(proposals: Any) -> Tuple[bool, str]:
+def validate_proposals(payload: Any) -> Tuple[bool, str]:
     """
     Deterministic schema gate before writing edit-proposals.json.
 
@@ -31,6 +31,19 @@ def validate_proposals(proposals: Any) -> Tuple[bool, str]:
         - rationale: str (non-empty)
         - id: int (optional; assigned by CLI)
     """
+    # Backward compatibility:
+    # - legacy: payload is a list of proposals
+    # - new: payload is an object with optional narrative + proposals
+    if isinstance(payload, list):
+        proposals = payload
+    elif isinstance(payload, dict):
+        proposals = payload.get("proposals")
+        narrative = payload.get("narrative", None)
+        if narrative is not None and not isinstance(narrative, str):
+            return _die("narrative must be a string if present")
+    else:
+        return _die("payload must be a list or an object with proposals")
+
     if not isinstance(proposals, list):
         return _die("proposals must be a list")
 
@@ -84,6 +97,7 @@ def json_schema_for_structured_outputs() -> Dict[str, Any]:
             "additionalProperties": False,
             "required": ["proposals"],
             "properties": {
+                "narrative": {"type": "string"},
                 "proposals": {
                     "type": "array",
                     "items": {

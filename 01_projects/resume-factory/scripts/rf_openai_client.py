@@ -26,7 +26,7 @@ def propose_edits_openai(
     model: Optional[str] = None,
     max_proposals: int = 12,
     timeout_s: int = 60,
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     _require("OPENAI_API_KEY")
 
     client = OpenAI(timeout=timeout_s)
@@ -44,6 +44,11 @@ ABSOLUTE RULES:
 - No commentary.
 - No trailing text.
 - JSON must parse via json.loads().
+
+NARRATIVE RULES:
+- "narrative" must be a single string.
+- Keep it short (max ~10 lines). No bullets required, but allowed.
+- It must not include JSON or code fences; just plain text.
 
 YOU MUST ANCHOR EVERY PROPOSAL TO AN EXISTING NUMBERED RESUME LINE:
 - Choose "before_ref" from the numbered RESUME text (e.g., S003, K012, E044).
@@ -87,6 +92,7 @@ combine them into ONE sentence that naturally incorporates both.
 
 JSON SHAPE:
 {{
+  "narrative": "<short, helpful, chat-style guidance in plain text>",
   "proposals": [
     {{
       "section": "SUMMARY|SKILLS|EXPERIENCE",
@@ -99,6 +105,7 @@ JSON SHAPE:
     }}
   ]
 }}
+
 
 CONSTRAINTS:
 - Propose at most {max_proposals} items.
@@ -165,4 +172,15 @@ Propose JD-aligned edits. Anchor each proposal to an existing numbered resume li
     if not isinstance(data, dict) or "proposals" not in data:
         raise RuntimeError(f"Invalid response shape: {data}")
 
-    return data["proposals"]
+    narrative = data.get("narrative", None)
+    if narrative is not None and not isinstance(narrative, str):
+        raise RuntimeError(f"Invalid narrative type: {type(narrative)}")
+
+    if not isinstance(data["proposals"], list):
+        raise RuntimeError("Invalid proposals type: proposals must be a list")
+
+    return {
+        "narrative": narrative,
+        "proposals": data["proposals"],
+    }
+

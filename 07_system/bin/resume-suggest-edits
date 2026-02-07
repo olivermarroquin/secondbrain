@@ -210,7 +210,7 @@ def main():
     attempts = 0
 
     all_proposals = []
-
+    narrative = None
 
     remaining_terms = list(run_terms)
 
@@ -221,7 +221,7 @@ def main():
         attempts += 1
 
 
-        batch = propose_edits_openai(
+        resp_payload = propose_edits_openai(
 
 
             jd_raw=jd_raw,
@@ -248,8 +248,14 @@ def main():
         )
 
 
-        all_proposals.extend(batch)
+        # New response shape: {"narrative": str|None, "proposals": [...]}
+        batch = (resp_payload.get("proposals") or [])
+        if narrative is None:
+            _n = resp_payload.get("narrative", None)
+            if isinstance(_n, str) and _n.strip():
+                narrative = _n.strip()
 
+        all_proposals.extend(batch)
 
         # remove jd_terms already used in this batch so next attempt explores NEW terms
 
@@ -469,7 +475,7 @@ def main():
             _sec = _sec[len("RESUME_"):]
         _p["section"] = _sec
 
-    ok, msg = validate_proposals(filtered)
+    ok, msg = validate_proposals({"narrative": narrative, "proposals": filtered})
     if not ok:
         die(f"proposal schema failed: {msg}")
 
@@ -500,6 +506,11 @@ def main():
             print(f"  - [{d.get('section','?')}] {d.get('reason')}: {b}")
         print()    
 
+    if narrative:
+        print("NARRATIVE:")
+        print(narrative)
+        print()
+    
     if args.diff:
         print_diff(filtered)
     else:
@@ -529,6 +540,7 @@ def main():
             "template_slug": template_slug,
             "template_path": str(template_path),
         },
+        "narrative": narrative,
         "proposals": filtered,
         "notes": "READ-ONLY proposals. These do not modify the resume. Use resume-approve-edits to approve by id."
     }
