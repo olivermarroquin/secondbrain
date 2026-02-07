@@ -31,6 +31,13 @@ RE_EEO_SLASH = re.compile(r"\b[mf]/f/(?:disability|disabled|veterans?)\b", re.I)
 RE_URL = re.compile(r"\bhttps?://\S+|\bwww\.\S+|\b\S+\.(com|net|org|gov|edu)\b", re.I)
 RE_EEO = re.compile(r"\bm/f\b|\bdisability\b|\bveterans?\b|\beeo\b", re.I)
 
+RE_SALARY_K = re.compile(r"^\d{2,3}k$", re.I)  # 80k, 115k, 120K
+RE_LOCATION_BASED = re.compile(r"^[a-z]+-based$", re.I)  # phoenix-based, remote-based
+
+# Timezone/location artifacts that are not skills
+TIMEZONES = {"mst", "pst", "est", "cst", "edt", "pdt", "cdt", "mdt", "utc", "gmt"}
+
+
 # Common benefits/boilerplate words we never want as JD terms
 JUNK_WORDS = {
     "required", "requirements", "must", "must-have", "musthave", "preferred",
@@ -117,6 +124,18 @@ def _is_junk(term: str) -> bool:
 
     # drop weird ID-like strings
     if re.fullmatch(r"[a-z0-9_-]{9,}", t) and any(ch.isdigit() for ch in t):
+        return True
+    
+    # Salary shorthand like "115k"
+    if RE_SALARY_K.match(t):
+        return True
+
+    # Location-based posting artifacts like "phoenix-based"
+    if RE_LOCATION_BASED.match(t):
+        return True
+
+    # Timezone abbreviations and known location/timezone combos like "az/mst"
+    if t in TIMEZONES or t.endswith("/mst") or t.endswith("/pst") or t.endswith("/est") or t.endswith("/cst"):
         return True
 
     return False
