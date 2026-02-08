@@ -96,14 +96,78 @@ These rules are **job-family agnostic** and apply to all roles.
    - Experience bullets must start with “• ”.
    - Do not edit headings like “PROFESSIONAL SUMMARY:” or “TECHNICAL SKILLS:”.
 
+## Paradigm Translation Rule (CRITICAL)
+
+When the JD introduces a tool or platform that implies a different testing paradigm
+(e.g., application QA → data QA, UI automation → data validation, cloud services → data warehouses):
+
+- Do NOT preserve the original testing mechanics.
+- Rewrite experience bullets using the *native quality practices* of the target platform.
+
+Examples:
+- AWS services → Snowflake:
+  - Replace service/log validation with SQL-based data validation, schema checks,
+    transformation verification, and reporting accuracy checks.
+- UI automation → data platforms:
+  - Replace UI flows with data integrity, pipeline validation, and downstream impact testing.
+
+Preserve:
+- Scope
+- Seniority
+- Metrics
+- Ownership
+
+Translate:
+- What is tested
+- How it is tested
+- How quality is validated
+- What “quality” means in that domain
+- What “correctness” means in the new domain
+
+## ChatGPT-Style Tailoring Behaviors (CRITICAL)
+
+A) Skills category coherence (schema-aware, flexible)
+- You MAY change skills category labels (left side of “Category: …”) if it improves ATS alignment.
+- However:
+  1) If the new category label already exists elsewhere in the skills section, do NOT duplicate it.
+     - Instead, merge/modify the existing category’s values to include what you intended.
+  2) If replacing Category A with Category B:
+     - Category A must NOT be relevant to the JD.
+     - If Category A IS relevant to the JD, do NOT replace it — treat Category B as an ADD category instead (keep A and add B).
+  3) If a category is clearly irrelevant to the JD and weakly supported, you may delete it.
+     - To delete a category line, output "__DELETE__" in the rewrite_packet line for that category.
+- Keep skills tight. Avoid keyword dumping.
+
+B) Ecosystem linking (smart adjacent tools, only with actions)
+- When a JD emphasizes a platform/tool/domain (e.g., AWS, Snowflake, Salesforce, Databricks, Kubernetes),
+  you may introduce 2–4 tightly-coupled adjacent tools/features that are commonly used with it.
+- Constraint: any introduced adjacent tool MUST be anchored to a concrete QA/testing action.
+  - Bad: “AWS (S3, CloudWatch)” with no action.
+  - Good: “validated data loads by checking S3 artifacts and CloudWatch logs” / “reconciled Snowflake tables via SQL assertions.”
+
+C) Action + Artifact + Check (AAC pattern)
+- Every rewritten EXPERIENCE bullet must include at least 2 of the following 3 elements:
+  - Action: implemented/validated/instrumented/reconciled/mocked/monitored
+  - Artifact: framework/suite/pipeline/SQL assertions/Postman collection/contract tests/reporting harness
+  - Check: data integrity/request-response contracts/schema validation/reconciliation/downstream transform accuracy/latency
+- This is required to avoid vague rewrites.
+
+D) Substitute, then demonstrate (paradigm-aware rewriting)
+- When pivoting paradigms (example: UI-testing-heavy app QA -> data-platform QA),
+  do more than swap keywords: demonstrate the target paradigm’s real testing moves.
+- If you substitute Tool/Paradigm A -> Tool/Paradigm B:
+  - At least one rewritten bullet must include a B-specific capability or validation method,
+    while preserving the original metric/scope (e.g., “200+”, “90%”, “70%”).
+- No shallow noun swaps.
+
+E) Preserve top-signal; rewrite weakest first
+- Do not rewrite bullets that already align strongly with the JD.
+- Prefer rewriting the lowest-signal bullets first (generic, low-tool, low-metric),
+  and only add/replace where it increases alignment measurably.
 
 
-
-## What “done” looks like
-- Summary reads like a strong ChatGPT rewrite: ATS-aligned but specific.
-- Skills are tightened without deleting relevant tools.
-- Experience edits preserve metrics/tools and add JD-aligned specificity.
 ## Stack Decision & Consistency Rules (CRITICAL)
+
 These rules are REQUIRED to get ChatGPT-style tailoring quality.
 
 1) Choose the JD primary stack
@@ -127,3 +191,8 @@ These rules are REQUIRED to get ChatGPT-style tailoring quality.
 
 5) No mixed-stack unless JD explicitly calls for it
    - Only keep multiple tools (e.g., Cypress + Playwright) if the JD clearly asks for both.
+
+## What “done” looks like
+- Summary reads like a strong ChatGPT rewrite: ATS-aligned but specific.
+- Skills are tightened without deleting relevant tools.
+- Experience edits preserve metrics/tools and add JD-aligned specificity.
