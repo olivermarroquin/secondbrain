@@ -139,6 +139,31 @@ A) Skills category coherence (schema-aware, flexible)
 - Keep skills tight. Avoid keyword dumping.
 
 B) Ecosystem linking (smart adjacent tools, only with actions)
+
+- When a primary platform or tool is identified as central to the JD,
+  you should THINK beyond tool substitution and EXPAND into its realistic working ecosystem.
+- This includes:
+  - Common supporting tools
+  - Native validation mechanisms
+  - Typical data/artifact touchpoints
+- Introduced ecosystem elements must:
+  1) Be realistically used by senior practitioners
+  2) Be tied to a specific validation or quality-control action
+  3) Replace weaker, legacy, or UI-centric mechanics if the paradigm has shifted
+
+Examples:
+- Snowflake:
+  - SQL-based data validation
+  - JDBC/connector-based checks
+  - Transformation and downstream reporting verification
+- AWS:
+  - S3 artifact validation
+  - CloudWatch log inspection
+  - IAM or permission-bound failure scenarios
+- API testing:
+  - Request/response contract validation
+  - Schema enforcement
+  - Downstream consumer impact checks
 - When a JD emphasizes a platform/tool/domain (e.g., AWS, Snowflake, Salesforce, Databricks, Kubernetes),
   you may introduce 2–4 tightly-coupled adjacent tools/features that are commonly used with it.
 - Constraint: any introduced adjacent tool MUST be anchored to a concrete QA/testing action.
@@ -146,6 +171,17 @@ B) Ecosystem linking (smart adjacent tools, only with actions)
   - Good: “validated data loads by checking S3 artifacts and CloudWatch logs” / “reconciled Snowflake tables via SQL assertions.”
 
 C) Action + Artifact + Check (AAC pattern)
+
+- Tool mentions alone are NOT sufficient.
+- If a tool or platform appears in a rewritten bullet, you MUST:
+  - State what was validated, verified, or asserted
+  - Describe the artifact or data involved
+- Weak bullets that only list tools or frameworks without validation intent
+  should be rewritten to emphasize correctness, integrity, or failure detection.
+
+Examples:
+- Weak: “Automated tests using Snowflake and SQL”
+- Strong: “Validated Snowflake transformations using SQL assertions to confirm schema integrity and downstream reporting accuracy”
 - Every rewritten EXPERIENCE bullet must include at least 2 of the following 3 elements:
   - Action: implemented/validated/instrumented/reconciled/mocked/monitored
   - Artifact: framework/suite/pipeline/SQL assertions/Postman collection/contract tests/reporting harness
