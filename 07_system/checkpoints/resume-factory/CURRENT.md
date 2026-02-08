@@ -167,3 +167,36 @@ When operating on resume-factory:
 3. Do not assume `application-record.json` drives status queries
 4. Proposal generation is stateless — changes are not cumulative
 5. Check `07_system/checkpoints/resume-factory/LATEST.md` for pointer to latest checkpoint
+
+---
+
+## 2026-02-08 — Progress Update
+
+### What changed (working)
+- Added/expanded **ChatGPT-style tailoring behaviors** in `AGENT_PROMPT.md`, including:
+  - Stack coherence + substitution (primary tool consistency)
+  - Paradigm-aware rewriting (domain pivots like UI QA → data validation, AWS/Snowflake-style rewrites)
+  - Skills category coherence guidance
+- `resume-suggest-edits` now compiles **category-aware SKILLS proposals**:
+  - Match SKILLS lines by category label (left of `:`) → `REPLACE_LINE`
+  - New category not present → `ADD_LINE`
+  - Non-JD-relevant categories → `DELETE_LINE` (when emitted)
+- End-to-end support for proposal ops now includes:
+  - `REPLACE_LINE`, `REPLACE_PHRASE`, `ADD_LINE`, `DELETE_LINE`
+- Schema validation updated to allow `DELETE_LINE` to carry empty `after` payloads (e.g., `[""]` / `[]`) without failing.
+
+### What we validated
+- Cypress-primary JD test produced coherent substitutions (Playwright → Cypress) across Summary/Skills/Experience.
+- `resume-approve-edits` applied selected proposals successfully and generated `resume_refs/resume.docx`.
+- Category-aware SKILLS logic prevented nonsense category swaps (e.g., Networking → CI/CD).
+
+### Known issues / next fixes
+- **Residual stack mentions** can remain (e.g., Playwright references) → need stronger “no conflicting stack mentions unless JD explicitly requires both.”
+- **Heading targeting**: ensure structural lines like “Roles and Responsibilities:” are never replaced.
+- **DOCX formatting**: skills category labels remain bold (template styling). Keep for now; revisit later.
+
+### Next steps
+1) Tighten stack-pivot enforcement (no leftover conflicting tool mentions).
+2) Improve “ecosystem-aware” rewriting (adjacent tools/actions: Snowflake → SQL/JDBC, AWS → S3/CloudWatch, API → contracts/validation).
+3) Improve SKILLS delete/keep logic so we don’t delete generally valuable categories unless explicitly instructed by JD.
+

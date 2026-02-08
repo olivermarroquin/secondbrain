@@ -486,3 +486,36 @@ Refactoring the entire system to be used for multiple job families, not just QA 
 - [2026-02-06 10:26] Second test entry — should show date + line number
 
 - [2026-02-06 11:07] Shim test entry
+
+---
+
+## 2026-02-08 — New enhancement ideas
+
+### Ecosystem-aware tool expansion (ChatGPT behavior)
+When the JD emphasizes a platform/tool, introduce *adjacent ecosystem services + realistic actions*:
+- AWS → S3, CloudWatch logs/metrics, IAM, event triggers, pipeline execution context
+- Snowflake → SQL assertions, JDBC/connector usage, data reconciliation, downstream transformation validation
+- API testing → request/response contract validation, schema checks, idempotency checks, data consistency across stores
+Goal: outputs feel “senior engineer real,” not keyword stuffing.
+
+### Action-level validation language
+Force rewrites to express:
+- what was validated
+- what artifacts were checked (tables, transformations, logs, contracts)
+- where it ran (CI/CD triggers, scheduled, event-driven, PR-gated)
+
+### Stack pivot enforcement
+Hard rule: If primary stack is Cypress, don’t leave Playwright mentions anywhere unless JD explicitly asks for both.
+Possible approaches:
+- Prompt rule
+- Post-rewrite consistency scan that flags conflicts
+
+### Heading/structure protection
+Strengthen detection of “structural” lines (e.g., “Roles and Responsibilities:”) so they cannot be rewritten.
+
+### Skills section semantics (KEEP / DELETE / ADD)
+Refine SKILLS logic:
+- If category exists and JD-relevant → update content (REPLACE_LINE)
+- If category exists and generally valuable but not JD-called-out → KEEP (no proposal)
+- If category is irrelevant/noisy → DELETE_LINE
+- If JD requires a category not present → ADD_LINE (but must be supported by at least one experience rewrite)

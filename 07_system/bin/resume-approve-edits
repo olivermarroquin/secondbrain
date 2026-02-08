@@ -196,6 +196,45 @@ def apply_replace_phrase(doc, before_phrase: str, after_phrase: str) -> bool:
 
 # --- Main ------------------------------------------------------------------
 
+def _iter_paragraphs(doc):
+    return list(getattr(doc, 'paragraphs', []))
+
+def apply_add_line(doc, anchor_line: str, new_line: str) -> bool:
+    # Insert new_line AFTER the paragraph whose text exactly equals anchor_line.
+    anchor_line = (anchor_line or '').strip()
+    new_line = (new_line or '').strip()
+    if not anchor_line or not new_line:
+        return False
+
+    from docx.oxml import OxmlElement
+    from docx.text.paragraph import Paragraph
+
+    for para in _iter_paragraphs(doc):
+        if (para.text or '').strip() == anchor_line:
+            new_p = OxmlElement('w:p')
+            para._p.addnext(new_p)
+            new_para = Paragraph(new_p, para._parent)
+            new_para.add_run(new_line)
+            return True
+    return False
+
+def apply_delete_line(doc, target_line: str) -> bool:
+    # Delete the paragraph whose text exactly equals target_line.
+    target_line = (target_line or '').strip()
+    if not target_line:
+        return False
+
+    for para in _iter_paragraphs(doc):
+        if (para.text or '').strip() == target_line:
+            p_elm = para._p
+            parent = p_elm.getparent()
+            if parent is None:
+                return False
+            parent.remove(p_elm)
+            return True
+    return False
+
+
 def main():
     ensure_docx()
     from docx import Document  # type: ignore
@@ -264,6 +303,10 @@ def main():
             ok = apply_replace_line(doc, b, a)
             if not ok:
                 ok = apply_replace_phrase(doc, b, a) # fallback
+        elif op == "ADD_LINE":
+            ok = apply_add_line(doc, b, a)
+        elif op == "DELETE_LINE":
+            ok = apply_delete_line(doc, b)
         elif op == "REPLACE_PHRASE":
             ok = apply_replace_phrase(doc, b, a)
         else:

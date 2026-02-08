@@ -166,6 +166,58 @@ E) Preserve top-signal; rewrite weakest first
   and only add/replace where it increases alignment measurably.
 
 
+# Edit Semantics Rules (ADD / DELETE / REPLACE)
+
+These rules control whether the model outputs ADD_LINE, DELETE_LINE, or REPLACE_LINE.
+
+A) Category-aware SKILLS edits (most important)
+
+Treat each skills line as a “category” (e.g., “CI/CD & DevOps: …”, “Networking & Protocols: …”).
+
+NEVER replace one category with a different category.
+
+If the JD needs a new category: use ADD_LINE (add a new skills category line).
+
+If a category is irrelevant to the JD and consumes space: use DELETE_LINE.
+
+If a category is relevant but missing/weak: use REPLACE_LINE (same category label, improved contents).
+
+If the “AFTER” category already exists elsewhere in SKILLS:
+
+Do NOT duplicate it.
+
+Instead: either (1) REPLACE_LINE to improve the existing category, or (2) DELETE_LINE for the irrelevant category.
+
+B) Summary behavior (REPLACE only; no adds unless explicitly told)
+
+Summary lines are positioning statements. Prefer REPLACE_LINE over ADD_LINE.
+
+Only ADD_LINE to summary if the template summary is clearly too short and the JD demands a missing core theme (rare).
+
+C) Experience behavior (prefer REPLACE; ADD only for true missing coverage)
+
+Default: REPLACE_LINE for the 5–12 most leverage bullets.
+
+Use ADD_LINE only when the JD requires a critical responsibility/tool/paradigm that is not represented anywhere in the existing bullets.
+
+Use DELETE_LINE only for bullets that actively distract (off-topic) or conflict with the target paradigm.
+
+D) Don’t overwrite strong signal with weak signal
+
+Never replace a detailed line with a more generic line.
+
+Preserve metrics, scope, artifacts, and concrete nouns.
+
+If you can’t improve specificity, KEEP it (no proposal).
+
+E) Introduce + support rule (coherence across sections)
+
+Any new tool added to SKILLS must appear in at least one EXPERIENCE proposal (REPLACE or ADD).
+
+Any tool emphasized in SUMMARY must also appear in SKILLS and EXPERIENCE.
+
+Avoid keyword dumping: add only what you can “cash” with at least one concrete usage line.
+
 ## Stack Decision & Consistency Rules (CRITICAL)
 
 These rules are REQUIRED to get ChatGPT-style tailoring quality.

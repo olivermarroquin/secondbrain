@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 ALLOWED_SECTIONS = {"SUMMARY", "SKILLS", "EXPERIENCE"}
-ALLOWED_OPS = {"REPLACE_LINE", "REPLACE_PHRASE"}
+ALLOWED_OPS = {"REPLACE_LINE", 'ADD_LINE', 'DELETE_LINE', "REPLACE_PHRASE"}
 
 @dataclass(frozen=True)
 class Proposal:
@@ -66,10 +66,24 @@ def validate_proposals(payload: Any) -> Tuple[bool, str]:
         if op not in ALLOWED_OPS:
             return _die(f"proposal #{i}: invalid op={op!r}")
 
+
+        # DELETE_LINE special-case:
+        # Allow after to be empty string ([""]) or empty list ([]) since deletion has no replacement text.
+        if op == "DELETE_LINE":
+            if not isinstance(after, list):
+                return _die(f"proposal #{i}: DELETE_LINE requires after to be a list (may be [''] or [])")
+            if after == []:
+                pass
+            elif len(after) == 1 and isinstance(after[0], str) and after[0] == "":
+                pass
+            else:
+                return _die(f"proposal #{i}: DELETE_LINE requires after to be [''] or []")
         if not isinstance(before, list) or not before or not all(isinstance(x, str) and x.strip() for x in before):
             return _die(f"proposal #{i}: before must be a non-empty list of non-empty strings")
-        if not isinstance(after, list) or not after or not all(isinstance(x, str) and x.strip() for x in after):
-            return _die(f"proposal #{i}: after must be a non-empty list of non-empty strings")
+        # after validation (DELETE_LINE is allowed to have empty after)
+        if op != "DELETE_LINE":
+            if not isinstance(after, list) or not after or not all(isinstance(x, str) and x.strip() for x in after):
+                return _die(f"proposal #{i}: after must be a non-empty list of non-empty strings")
         if not isinstance(rationale, str) or not rationale.strip():
             return _die(f"proposal #{i}: rationale must be a non-empty string")
 

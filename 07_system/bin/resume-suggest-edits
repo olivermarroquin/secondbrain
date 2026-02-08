@@ -141,6 +141,16 @@ def main():
     # We compile deterministic proposals from rewrite_packet using before_ref anchors.
     proposals = []
 
+    def _skills_cat(line: str) -> str:
+        if not isinstance(line, str):
+            return ""
+        t = line.strip()
+        if ":" not in t:
+            return ""
+        cat = t.split(":", 1)[0].strip().lower()
+        cat = re.sub(r"\s+", " ", cat)
+        return cat
+
     def _as_lines(v):
         if isinstance(v, list):
             return [str(x).rstrip() for x in v if isinstance(x, str) and x.strip()]
@@ -200,21 +210,177 @@ def main():
             "rationale": f"Rewrite packet summary update for {ref}.",
         })
 
-    # Compile SKILLS replacements (replace existing skills lines in order)
+    # Compile SKILLS replacements (category-aware; no cross-category swaps)
     sk_lines = _as_lines(rewrite_packet.get("technical_skills"))
-    k_refs = [r for r in _sorted_refs("K") if line_index.get(r, {}).get("section") == "SKILLS" and not _is_heading_line(r)]
-    for i in range(min(len(sk_lines), len(k_refs))):
-        ref = k_refs[i]
-        before = line_index[ref]["text"]
-        after0 = _preserve_bullet(before, sk_lines[i])
-        proposals.append({
-            "section": "SKILLS",
-            "op": "REPLACE_LINE",
-            "before_ref": ref,
-            "before": [before],
-            "after": [after0],
-            "rationale": f"Rewrite packet skills update for {ref}.",
-        })
+
+    # Map existing template SKILLS lines by category label (left side of ':')
+    k_refs_all = [
+        r for r in _sorted_refs("K")
+        if line_index.get(r, {}).get("section") == "SKILLS"
+    ]
+    k_refs = [r for r in k_refs_all if not _is_heading_line(r)]
+
+    def _skill_label(line: str) -> str:
+        t = (line or "").strip()
+        if ":" not in t:
+            return ""
+        return t.split(":", 1)[0].strip().lower()
+
+    def _jd_relevant_skill_line(skill_line: str) -> bool:
+        # Conservative heuristic:
+        # - If any token/tool from the skill line appears in the JD, treat as relevant.
+        # - If the label itself appears in the JD, treat as relevant.
+        # NOTE: jd_norm exists earlier in main() and is our normalized JD text.
+        t = (skill_line or "").lower()
+        if not t:
+            return False
+
+        # label relevance
+        lab = _skill_label(t)
+        if lab and lab in jd_norm:
+            return True
+
+        # value relevance (comma-separated)
+        if ":" in t:
+            vals = t.split(":", 1)[1]
+        else:
+            vals = t
+
+        # extract terms like "GitHub Actions", "SQL", "REST", etc.
+        parts = [x.strip() for x in vals.split(",") if x.strip()]
+        for term in parts:
+            # normalize term: keep alnum + space
+            term_norm = "".join(ch if (ch.isalnum() or ch.isspace()) else " " for ch in term)
+            term_norm = " ".join(term_norm.split()).strip()
+            if not term_norm:
+                continue
+
+            # check both full phrase and key tokens
+            if term_norm in jd_norm:
+                return True
+
+            for tok in term_norm.split():
+                if len(tok) >= 3 and tok in jd_norm:
+                    return True
+
+        return False
+
+    existing_by_label = {}
+    existing_line_by_label = {}
+    for ref in k_refs:
+        before_line = (line_index.get(ref, {}) or {}).get("text", "")
+        lab = _skill_label(before_line)
+        if lab and lab not in existing_by_label:
+            existing_by_label[lab] = ref
+            existing_line_by_label[lab] = before_line
+
+    # Choose a stable anchor for ADD_LINE insertions (after last non-heading SKILLS line)
+    add_anchor_ref = k_refs[-1] if k_refs else (k_refs_all[-1] if k_refs_all else "")
+    add_anchor_text = (line_index.get(add_anchor_ref, {}) or {}).get("text", "") if add_anchor_ref else ""
+
+    used_labels = set()
+
+    # 1) Emit REPLACE_LINE when label exists; otherwise ADD_LINE (no category replacement)
+    for ln in sk_lines:
+        lab = _skill_label(ln)
+        if not lab:
+            continue
+        if lab in used_labels:
+            continue
+        used_labels.add(lab)
+
+        if lab in existing_by_label:
+            ref = existing_by_label[lab]
+            before = line_index[ref]["text"]
+            after0 = _preserve_bullet(before, ln)
+
+            # PRIMARY STACK substitution for Automation Frameworks:
+            # If JD is Cypress-primary and does not mention Playwright, drop Playwright (and vice-versa).
+            # This prevents "Playwright, Cypress" keyword dumping when JD wants one.
+            def _primary_tool() -> str:
+                if "cypress" in jd_norm:
+                    return "cypress"
+                if "playwright" in jd_norm:
+                    return "playwright"
+                if "selenium" in jd_norm:
+                    return "selenium"
+                return ""
+
+            if lab == "automation frameworks":
+                pt = _primary_tool()
+                if pt:
+                    parts = [x.strip() for x in after0.split(":", 1)[1].split(",")] if ":" in after0 else [after0]
+                    kept = []
+                    for t in parts:
+                        tl = t.lower()
+                        # keep if term matches primary tool, or JD explicitly mentions it, or it's a non-competing staple in JD
+                        if pt in tl:
+                            kept.append(t)
+                            continue
+                        if t.lower() in jd_norm:
+                            kept.append(t)
+                            continue
+                        # Competing stack removal: drop Playwright when Cypress-primary unless JD mentions Playwright, and vice versa
+                        if pt == "cypress" and "playwright" in tl and "playwright" not in jd_norm:
+                            continue
+                        if pt == "playwright" and "cypress" in tl and "cypress" not in jd_norm:
+                            continue
+                        kept.append(t)
+                    if ":" in after0:
+                        after0 = after0.split(":", 1)[0].strip() + ": " + ", ".join([k for k in kept if k])
+
+            # If AFTER == BEFORE:
+            # - If category is NOT JD-relevant -> DELETE_LINE
+            # - Else -> KEEP (emit nothing)
+            if (after0 or "").strip() == (before or "").strip():
+                if not _jd_relevant_skill_line(before):
+                    proposals.append({
+                        "section": "SKILLS",
+                        "op": "DELETE_LINE",
+                        "before_ref": ref,
+                        "before": [before],
+                        "after": [""],
+                        "rationale": "Delete SKILLS category line (no change + not JD-relevant).",
+                    })
+                # else KEEP: do nothing
+            else:
+                proposals.append({
+                    "section": "SKILLS",
+                    "op": "REPLACE_LINE",
+                    "before_ref": ref,
+                    "before": [before],
+                    "after": [after0],
+                    "rationale": f"Rewrite packet skills update for {ref} (category-aware).",
+                })
+        else:
+            # New category: add it after the last skills line (or skip if we have no anchor)
+            if add_anchor_text:
+                proposals.append({
+                    "section": "SKILLS",
+                    "op": "ADD_LINE",
+                    "before_ref": add_anchor_ref,
+                    "before": [add_anchor_text],
+                    "after": [ln],
+                    "rationale": "Add new SKILLS category (category-aware).",
+                })
+
+    # 2) DELETE/KEEP: for existing categories not mentioned in rewrite output
+    # - If NOT JD-relevant => DELETE_LINE
+    # - If JD-relevant => KEEP (do nothing)
+    for lab, ref in existing_by_label.items():
+        if lab in used_labels:
+            continue
+        before_line = existing_line_by_label.get(lab, line_index.get(ref, {}).get("text", ""))
+        if not _jd_relevant_skill_line(before_line):
+            proposals.append({
+                "section": "SKILLS",
+                "op": "DELETE_LINE",
+                "before_ref": ref,
+                "before": [before_line],
+                "after": [""],
+                "rationale": "Remove non-JD-relevant SKILLS category (category-aware).",
+            })
+
 
     # Compile EXPERIENCE replacements (explicit targets)
     exp_items = rewrite_packet.get("experience") or []
