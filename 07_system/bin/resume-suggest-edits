@@ -23,7 +23,7 @@ def has(text: str, kw: str) -> bool:
     kw = (kw or "").strip().lower()
     return bool(kw) and kw in text
 
-def score(sig: dict, text: str) -> tuple[int, list[str], list[str], list[str]]:
+def score(sig: dict, text: str):
     pref = [k for k in sig.get("preferred_keywords", []) if isinstance(k, str)]
     neut = [k for k in sig.get("neutral_keywords", []) if isinstance(k, str)]
     anti = [k for k in sig.get("anti_signals", []) if isinstance(k, str)]
@@ -54,20 +54,12 @@ def select_template(family_root: Path, jd_text_norm: str, requested: str):
     for sig_p in family_root.rglob("signals.json"):
         sig = load_json(sig_p)
         sc, hp, hn, ha = score(sig, jd_text_norm)
-        rows.append({
-            "score": sc,
-            "sig": sig,
-            "path": sig_p.parent,
-            "hits_pref": hp,
-            "hits_neut": hn,
-            "hits_anti": ha,
-        })
+        rows.append({"score": sc, "sig": sig, "path": sig_p.parent})
     if not rows:
         die(f"no signals.json found under: {family_root}")
 
     if requested != "auto":
         req = requested.strip().lower()
-        # allow "04", "04_typescript_playwright", "typescript_playwright"
         for r in rows:
             tid = str(r["sig"].get("template_id","")).zfill(2)
             slug = (r["sig"].get("template_slug") or r["path"].name).lower()
@@ -78,48 +70,6 @@ def select_template(family_root: Path, jd_text_norm: str, requested: str):
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows[0], rows
 
-# ---- semantic guardrails (deterministic) ----
-def term_category(term: str) -> str:
-    t = (term or "").lower()
-    if any(x in t for x in ["performance/load", "performance/load/stress", "load/stress", "load testing", "stress testing"]):
-        return "PERF"
-    if "ui/ux" in t or t == "ux" or t.endswith("/ux") or t.startswith("ux"):
-        return "UX"
-    if "sql" in t:
-        return "SQL"
-    return "GEN"
-
-def line_has_perf_cues(line: str) -> bool:
-    l = (line or "").lower()
-    return any(x in l for x in ["performance", "load", "stress", "jmeter", "gatling", "k6"])
-
-def line_has_sql_cues(line: str) -> bool:
-    l = (line or "").lower()
-    return any(x in l for x in ["sql", "database", "jdbc", "query"])
-
-def line_has_ci_cues(line: str) -> bool:
-    l = (line or "").lower()
-    return any(x in l for x in [
-        "jenkins", "github actions", "gitlab", "teamcity", "bamboo", "circleci",
-        "ci/cd", "cicd", "continuous integration", "continuous delivery",
-        "pipeline", "build", "deploy", "deployment", "release"
-    ])
-
-def after_has_bad_phrasing(after: str) -> bool:
-    a = (after or "").lower()
-    bad_snippets = [
-        "a design/implementation of",
-        "designed and implemented a design/implementation",
-        "optimizing back-end",
-        "optimize back-end",
-        "into the ui test framework",
-    ]
-    return any(x in a for x in bad_snippets)
-
-def line_has_ux_cues(line: str) -> bool:
-    l = (line or "").lower()
-    return any(x in l for x in ["ui", "ux", "user experience", "front end", "frontend", "ui/ux"])
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app", required=True)
@@ -127,11 +77,6 @@ def main():
     ap.add_argument("--diff", action="store_true", help="Show BEFORE/AFTER diffs (recommended)")
     ap.add_argument("--family", default="qa_automation_engineer")
     ap.add_argument("--no-write", action="store_true", help="Do not write edit-proposals.json")
-    ap.add_argument(
-    "--fresh",
-    action="store_true",
-    help="Ignore prior edit-proposals.json term history and regenerate suggestions",
-    )
     args = ap.parse_args()
 
     app = Path(args.app).expanduser()
@@ -154,13 +99,10 @@ def main():
 
     best, _rows = select_template(family_root, jd_norm, args.template)
     sig = best["sig"]
-    template_id_raw = str(sig.get("template_id","??"))
-    template_id = template_id_raw.zfill(2) if template_id_raw.isdigit() else template_id_raw
-    template_slug = sig.get("template_slug", best["path"].name)
     template_path = best["path"]
+    template_folder_name = template_path.name
     docx_path = template_path / "resume-master.docx"
 
-    # Import internal helpers (repo-relative, deterministic)
     scripts_dir = Path.home() / "secondbrain/01_projects/resume-factory/scripts"
     if not scripts_dir.is_dir():
         die(f"missing scripts dir: {scripts_dir}")
@@ -168,366 +110,201 @@ def main():
     sys.path.insert(0, str(scripts_dir))
 
     from rf_docx_extract import read_docx_lines, locate_sections, format_numbered_blocks_for_prompt
-    from rf_openai_client import propose_edits_openai
+    from rf_rewrite_client import generate_rewrite_packet_openai
+    from rf_render_rewrite_packet import render_rewrite_packet_md
     from rf_proposal_schema import validate_proposals
     from rf_print_diff import print_diff
-    from rf_jd_terms import extract_jd_terms, rationale_mentions_term
 
-    # Extract resume text blocks deterministically
+    # Extract resume text blocks deterministically (source is template)
     lines = read_docx_lines(docx_path)
     header, summary, skills, exp = locate_sections(lines)
     resume_blocks_numbered, line_index = format_numbered_blocks_for_prompt(header, summary, skills, exp, max_exp_lines=90)
-    resume_all_text = "\n".join([v["text"] for v in line_index.values()]).lower()
 
-    # Provider call (AI proposes only)
     if not os.environ.get("OPENAI_API_KEY"):
         die("missing OPENAI_API_KEY (export it in your shell)")
 
-    jd_terms = extract_jd_terms(jd_raw)
+    payload = generate_rewrite_packet_openai(
+        jd_raw=jd_raw,
+        resume_blocks_numbered=resume_blocks_numbered,
+        signals=sig,
+        selected_template=template_folder_name,
+        model=os.environ.get("RF_OPENAI_MODEL", None),
+        max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "16")),
+        timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "90")),
+    )
 
-    # Run gate: only propose NEW missing JD terms (but always allow cloud terms)
-    out_dir = app / "resume_refs"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_p = out_dir / "edit-proposals.json"
+    if payload.get("selected_template") != template_folder_name:
+        die(f"LLM selected_template mismatch. expected={template_folder_name} got={payload.get('selected_template')!r}")
 
-    prior_jd_terms = set()
-    if (not args.fresh) and out_p.exists():
-        try:
-            prior_payload = json.loads(out_p.read_text())
-            for pp in (prior_payload.get("proposals") or []):
-                jt = (pp.get("jd_term") or "").strip().lower()
-                if jt:
-                    prior_jd_terms.add(jt)
-        except Exception:
-            prior_jd_terms = set()
-    ALWAYS_ALLOW = {"aws", "azure", "gcp"}
-    missing_terms = [t for t in jd_terms if t and t.lower() not in resume_all_text]
-    run_terms = [t for t in missing_terms if (t.lower() not in prior_jd_terms) or (t.lower() in ALWAYS_ALLOW)]
+    rewrite_packet = payload.get("rewrite_packet") or {}
+    # IMPORTANT (Option A): ignore LLM-provided proposals.
+    # We compile deterministic proposals from rewrite_packet using before_ref anchors.
+    proposals = []
 
-    if args.fresh:
-        print("RUN MODE: fresh (ignoring prior edit-proposals.json)")
+    def _as_lines(v):
+        if isinstance(v, list):
+            return [str(x).rstrip() for x in v if isinstance(x, str) and x.strip()]
+        if isinstance(v, str):
+            return [ln.rstrip() for ln in v.splitlines() if ln.strip()]
+        return []
 
-    attempts = 0
+    def _sorted_refs(prefix: str):
+        refs = [r for r, meta in line_index.items() if r.startswith(prefix) and meta.get("section") in ("SUMMARY","SKILLS","EXPERIENCE")]
+        def key(r):
+            try:
+                return int(r[1:])
+            except Exception:
+                return 10**9
+        return sorted(refs, key=key)
 
-    all_proposals = []
-    narrative = None
+    def _preserve_bullet(before_line: str, after_line: str) -> str:
+        b = (before_line or "").lstrip()
+        a = (after_line or "").lstrip()
+        before_has = b.startswith("•")
+        after_has = a.startswith("•")
+        if before_has and not after_has:
+            return "• " + a
+        if (not before_has) and after_has:
+            # if template line wasn't a bullet, don't introduce a bullet
+            return a.lstrip("•").lstrip()
+        return after_line
 
-    remaining_terms = list(run_terms)
+    def _is_heading_line(ref: str) -> bool:
+        # Never replace structural heading lines like "PROFESSIONAL SUMMARY:" / "TECHNICAL SKILL:"
+        line = (line_index.get(ref, {}) or {}).get("text", "")
+        t = (line or "").strip()
+        if not t:
+            return True
+        # Heuristic: heading lines are often uppercase-ish and end with ":" (and are not bullets)
+        if t.endswith(":") and not t.lstrip().startswith("•"):
+            return True
+        # Also block known headings without relying on exact text
+        tu = t.upper().rstrip(":").strip()
+        if tu in {"PROFESSIONAL SUMMARY", "SUMMARY", "TECHNICAL SKILL", "TECHNICAL SKILLS", "SKILLS", "PROFESSIONAL EXPERIENCE", "EXPERIENCE"}:
+            return True
+        return False
 
+    # Compile SUMMARY replacements (replace existing summary lines in order)
+    ps_lines = _as_lines(rewrite_packet.get("professional_summary"))
+    s_refs = [r for r in _sorted_refs("S") if line_index.get(r, {}).get("section") == "SUMMARY" and not _is_heading_line(r)]
+    for i in range(min(len(ps_lines), len(s_refs))):
+        ref = s_refs[i]
+        before = line_index[ref]["text"]
+        after0 = _preserve_bullet(before, ps_lines[i])
+        proposals.append({
+            "section": "SUMMARY",
+            "op": "REPLACE_LINE",
+            "before_ref": ref,
+            "before": [before],
+            "after": [after0],
+            "rationale": f"Rewrite packet summary update for {ref}.",
+        })
 
-    while attempts < 3 and remaining_terms:
+    # Compile SKILLS replacements (replace existing skills lines in order)
+    sk_lines = _as_lines(rewrite_packet.get("technical_skills"))
+    k_refs = [r for r in _sorted_refs("K") if line_index.get(r, {}).get("section") == "SKILLS" and not _is_heading_line(r)]
+    for i in range(min(len(sk_lines), len(k_refs))):
+        ref = k_refs[i]
+        before = line_index[ref]["text"]
+        after0 = _preserve_bullet(before, sk_lines[i])
+        proposals.append({
+            "section": "SKILLS",
+            "op": "REPLACE_LINE",
+            "before_ref": ref,
+            "before": [before],
+            "after": [after0],
+            "rationale": f"Rewrite packet skills update for {ref}.",
+        })
 
-
-        attempts += 1
-
-
-        resp_payload = propose_edits_openai(
-
-
-            jd_raw=jd_raw,
-
-
-            resume_blocks_numbered=resume_blocks_numbered,
-
-
-            signals=sig,
-
-
-            jd_terms=remaining_terms,
-
-
-            model=os.environ.get("RF_OPENAI_MODEL", None),
-
-
-            max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "12")),
-
-
-            timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "60")),
-
-
-        )
-
-
-        # New response shape: {"narrative": str|None, "proposals": [...]}
-        batch = (resp_payload.get("proposals") or [])
-        if narrative is None:
-            _n = resp_payload.get("narrative", None)
-            if isinstance(_n, str) and _n.strip():
-                narrative = _n.strip()
-
-        all_proposals.extend(batch)
-
-        # remove jd_terms already used in this batch so next attempt explores NEW terms
-
-
-        batch_terms = set()
-
-
-        for _p in batch:
-
-
-            _t = (_p.get("jd_term") or "").strip().lower()
-
-
-            if _t:
-
-
-                batch_terms.add(_t)
-
-
-        remaining_terms = [t for t in remaining_terms if t.strip().lower() not in batch_terms]
-
-
-        if len(all_proposals) >= int(os.environ.get("RF_MAX_PROPOSALS", "12")):
-
-
-            break
-
-
-    proposals = all_proposals
-
-    # Enforce "before exists verbatim" + section scoping deterministically
-    # (Model is instructed, but we verify and drop violations.)
-    summary_text = "\n".join(summary)
-    skills_text = "\n".join(skills)
-    exp_text = "\n".join(exp)
-
-    filtered = []
-    dropped = 0
-    dropped_notes = []
-    used_jd_terms = set()
-    used_before_refs = set()   
-    for p in proposals:
-        # before may be a string or a list[str] (model output). Normalize deterministically.
-        before_raw = p.get("before")
-        if isinstance(before_raw, list):
-            before = (before_raw[0] if before_raw else "")
-        else:
-            before = (before_raw or "")
-
-        section = (p.get("section") or "").strip().upper()
-        # Normalize section aliases the model may emit
-        SECTION_ALIASES = {
-            "RESUME_SKILLS": "SKILLS",
-            "RESUME_EXPERIENCE": "EXPERIENCE",
-            "RESUME_SUMMARY": "SUMMARY",
-        }
-        section = SECTION_ALIASES.get(section, section)
-
-        def drop(reason: str):
-            nonlocal dropped
-            dropped += 1
-            dropped_notes.append({
-                "section": section,
-                "reason": reason,
-                "before": before,
+    # Compile EXPERIENCE replacements (explicit targets)
+    exp_items = rewrite_packet.get("experience") or []
+    if isinstance(exp_items, list):
+        for item in exp_items:
+            if not isinstance(item, dict):
+                continue
+            ref = (item.get("target") or "").strip()
+            action = (item.get("action") or "REPLACE_LINE").strip().upper()
+            new_line = item.get("new_line")
+            if not ref or ref not in line_index:
+                continue
+            if not isinstance(new_line, str) or not new_line.strip():
+                continue
+            before = line_index[ref]["text"]
+            after0 = _preserve_bullet(before, new_line.strip())
+            op = "REPLACE_LINE" if action == "REPLACE_LINE" else "REPLACE_LINE"
+            proposals.append({
+                "section": "EXPERIENCE",
+                "op": op,
+                "before_ref": ref,
+                "before": [before],
+                "after": [after0],
+                "rationale": f"Rewrite packet experience update for {ref}.",
             })
 
-        if not before or not isinstance(before, str):
-            drop("missing_or_nonstring_before")
+    if not isinstance(rewrite_packet, dict):
+        die("invalid rewrite_packet: must be an object")
+    if not isinstance(proposals, list):
+        die("invalid proposals: must be a list")
+
+    # Enforce before_ref exists and before[0] exact match (no legacy heuristics)
+    # Deterministic proposal normalization:
+    # - Require before_ref exists
+    # - Inject before[0] from line_index (source of truth)
+    # - No legacy heuristics
+    cleaned = []
+    used_before_refs = set()
+
+    for p in proposals:
+        if not isinstance(p, dict):
             continue
-        
+
         before_ref = (p.get("before_ref") or "").strip()
         if not before_ref or before_ref not in line_index:
-            drop("missing_or_invalid_before_ref")
-            continue
-
-        expected = line_index[before_ref]["text"]
-
-        def _norm_match(x: str) -> str:
-            x = (x or "")
-            x = x.replace("\u00a0", " ")  # NBSP -> space
-            x = x.replace("\u2019", "'").replace("’", "'").replace("‘", "'")
-            x = x.replace("“", '"').replace("”", '"')
-            x = x.strip().lower()
-            x = __import__("re").sub(r"\s+", " ", x)
-            x = __import__("re").sub(r"[\s\.,!?;:\)\]\}\"']+$", "", x)
-            return x
-
-        if before != expected:
-            if _norm_match(before) != _norm_match(expected):
-                drop("before_text_mismatch_for_before_ref")
-                continue
-            # allow through if only trivial whitespace/quote/trailing punctuation variation
-
-        ref_section = line_index[before_ref]["section"]
-        if section and section != ref_section:
-            drop("section_mismatch_for_before_ref")
-            continue
-        
-        if section == "SUMMARY" and before not in summary_text:
-            drop("before_not_in_summary_block")
-            continue
-        if section == "SKILLS" and before not in skills_text:
-            drop("before_not_in_skills_block")
-            continue
-        if section == "EXPERIENCE" and before not in exp_text:
-            drop("before_not_in_experience_block")
-            continue
-
-        jd_term = (p.get("jd_term") or "").strip().lower()
-        rationale = (p.get("rationale") or "")
-
-       
-        if jd_term not in rationale.lower():
-            if not rationale.strip():
-                drop("rationale_missing_jd_term")
-                continue
-            rationale = f"JD mentions {jd_term}; align resume to JD requirement. " + rationale.strip()
-            p["rationale"] = rationale
-
-        # Missing-term gate: reject proposals for terms already present in resume
-        if jd_term and jd_term in resume_all_text:
-            drop("jd_term_already_present_in_resume")
-            continue
-
-        # ---- semantic guardrails (stop "keyword stuffing" into wrong lines) ----
-        cat = term_category(jd_term)
-        before_line = line_index.get(before_ref, {}).get("text", "")
-
-        # ---- hard block: never edit resume headings ----
-        bl = (before_line or "").strip()
-        bl_u = bl.upper().rstrip(":").strip()
-
-        HEADING_BLOCK = {
-            "PROFESSIONAL EXPERIENCE",
-            "EXPERIENCE",
-            "TECHNICAL SKILLS",
-            "SKILLS",
-            "PROFESSIONAL SUMMARY",
-            "SUMMARY",
-            "EDUCATION",
-            "CERTIFICATIONS",
-            "PROJECTS",
-        }
-
-        # If it looks like a heading, kill it.
-        if bl.endswith(":") and bl_u in HEADING_BLOCK:
-            drop("target_is_resume_heading")
-            continue
-
-        # ---- hard block: never edit ROLE HEADER lines (job title / company / dates) ----
-        # Examples:
-        # "Sr. Test Automation Engineer  Food and Drug Administration  Jul 2021 -- Present"
-        # These must never be modified.
-        if (
-            re.search(r"\b(19|20)\d{2}\b", bl)
-            and re.search(r"--|present", bl.lower())
-        ):
-            drop("target_is_role_header_line")
-            continue
-
-        if (
-            re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b", bl.lower())
-            and re.search(r"--|present", bl.lower())
-        ):
-            drop("target_is_role_header_line")
-            continue
-
-        if cat == "PERF":
-            # If the target line is clearly SQL/database-only, don't append perf/load unless perf cues already exist
-            if line_has_sql_cues(before_line) and not line_has_perf_cues(before_line):
-                drop("semantic_mismatch_perf_term_in_sql_line")
-                continue
-            # New: don't bolt perf/load onto CI/CD lines unless perf is already present
-            if line_has_ci_cues(before_line) and not line_has_perf_cues(before_line):
-                drop("semantic_mismatch_perf_term_in_ci_line")
-                continue
-
-        if cat == "UX":
-             # Allow UI/UX when the target line already has UX or accessibility cues
-             if not (
-                line_has_ux_cues(before_line)
-                or any(
-                    x in before_line.lower()
-                    for x in ["accessibility", "wcag", "axe", "wave", "aria"]
-                )
-            ):
-                drop("semantic_mismatch_ux_term_without_ux_or_accessibility_cues")
-                continue
-                # If it passes the cue check, let it proceed to uniqueness + filtered.append    
-
-        # ---- FINAL uniqueness gates (do not mutate until both pass) ----
-        if jd_term and jd_term in used_jd_terms:
-            drop("duplicate_jd_term_in_run")
             continue
 
         if before_ref in used_before_refs:
-            drop("duplicate_before_ref_in_run")
             continue
-
-        # Commit uniqueness only after both pass
-        if jd_term:
-            used_jd_terms.add(jd_term)
         used_before_refs.add(before_ref)
 
-        filtered.append(p)
-      
- 
-    # Assign deterministic ids (approve step expects stable ids)
-    for i, p in enumerate(filtered, start=1):
-        p["id"] = i
+        expected_before = line_index[before_ref]["text"]
 
-    # Normalize section values from model output to match schema (drop RESUME_ prefix)
-    for _p in (filtered or []):
-        _sec = (_p.get("section") or "").strip().upper()
-        if _sec.startswith("RESUME_"):
-            _sec = _sec[len("RESUME_"):]
-        _p["section"] = _sec
+        section = (p.get("section") or "").strip().upper()
+        op = (p.get("op") or "").strip().upper()
+        after = p.get("after")
+        rationale = p.get("rationale")
 
-    ok, msg = validate_proposals({"narrative": narrative, "proposals": filtered})
+        # Normalize after to list[str] for schema consistency
+        if isinstance(after, str):
+            after = [after]
+        if not isinstance(after, list) or not after or not isinstance(after[0], str):
+            continue
+
+        cleaned.append({
+            "section": section,
+            "op": op,
+            "before_ref": before_ref,
+            "before": [expected_before],
+            "after": [after[0]],
+            "rationale": rationale,
+        })
+
+    ok, msg = validate_proposals({"narrative": None, "proposals": cleaned})
     if not ok:
         die(f"proposal schema failed: {msg}")
 
-    print(f"APP: {app}")
-    print(f"JOB: {jm.get('company','?')} | {jm.get('role_title','?')} | date_found={jm.get('date_found','?')}")
-    print(f"TEMPLATE (selected): {template_id} {template_slug}")
-    print(f"TEMPLATE PATH: {template_path}")
-    print()
+    # Write rewrite packet artifacts
+    notes_dir = app / "notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    raw_json_p = notes_dir / "rewrite-packet.json"
+    md_p = notes_dir / "rewrite-packet.md"
+    raw_json_p.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    md_p.write_text(render_rewrite_packet_md(payload) + "\n")
 
-    print(f"JD TERMS (gate): {', '.join(jd_terms) if jd_terms else '(none detected)'}")
-    print()
-
-    print(f"JD TERMS (missing-only gate): {', '.join(missing_terms) if missing_terms else '(none missing)'}")
-    print()
-
-    # Run gate: only feed "missing terms" that we have not already proposed in prior runs.
-    # Source of truth for prior proposals: resume_refs/edit-proposals.json
-    prior_terms_path = app / "resume_refs" / "edit-proposals.json"
-    print(f"JD TERMS (run gate): {', '.join(run_terms) if run_terms else '(none eligible)'}")
-    print()
-
-    if dropped:
-        print(f"NOTE: dropped {dropped} unsafe proposal(s).")
-        # show up to 10 drop reasons for debugging
-        for d in dropped_notes[:10]:
-            b = (d.get("before") or "")
-            b = b if len(b) <= 120 else (b[:119] + "…")
-            print(f"  - [{d.get('section','?')}] {d.get('reason')}: {b}")
-        print()    
-
-    if narrative:
-        print("NARRATIVE:")
-        print(narrative)
-        print()
-    
-    if args.diff:
-        print_diff(filtered)
-    else:
-        if filtered:
-            print("Proposed localized edits (READ-ONLY):")
-            for p in filtered:
-                print(f"{p['id']}. [{p['section']}] {p.get('rationale','')}".rstrip())
-        else:
-            print("Proposed localized edits (READ-ONLY): none.")
-        print()
-
-    # Write proposals file (non-destructive)
     out_dir = app / "resume_refs"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_p = out_dir / "edit-proposals.json"
 
-    payload = {
+    out_payload = {
         "app": str(app),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "job": {
@@ -535,21 +312,26 @@ def main():
             "role_title": jm.get("role_title"),
             "date_found": jm.get("date_found"),
         },
-        "template": {
-            "template_id": template_id,
-            "template_slug": template_slug,
-            "template_path": str(template_path),
-        },
-        "narrative": narrative,
-        "proposals": filtered,
-        "notes": "READ-ONLY proposals. These do not modify the resume. Use resume-approve-edits to approve by id."
+        "selected_template": template_folder_name,
+        "narrative": (rewrite_packet.get("notes") if isinstance(rewrite_packet.get("notes"), str) else None),
+        "proposals": cleaned,
+        "notes": "READ-ONLY proposals. Approve with resume-approve-edits.",
     }
 
     if args.no_write:
         print("NOTE: --no-write set; not writing edit-proposals.json")
     else:
-        out_p.write_text(json.dumps(payload, indent=2) + "\n")
-        print(f"Wrote proposals: {out_p}")
+        out_p.write_text(json.dumps(out_payload, indent=2, ensure_ascii=False) + "\n")
+
+    if args.diff:
+        print_diff(cleaned)
+
+    print(f"TEMPLATE: {template_folder_name}")
+    print(f"PROPOSALS: {len(cleaned)}")
+    print(f"WROTE: {raw_json_p}")
+    print(f"WROTE: {md_p}")
+    if not args.no_write:
+        print(f"WROTE: {out_p}")
 
 if __name__ == "__main__":
     main()
