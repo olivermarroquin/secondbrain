@@ -6,7 +6,7 @@ Read order:
 
 Files:
 - CURRENT: CURRENT.md
-- Checkpoint: checkpoints/2026-02-07_checkpoint.md
-- Synthesis: analysis/2026-02-07_run01_post-run_synthesis.md
-- Log: logs/2026-02-07_run01_full-run-log.md
-- Archive notes: archives/2026-02-07_run01_archive-notes.md
+- Checkpoint: checkpoints/2026-02-09_checkpoint.md
+- Synthesis: analysis/2026-02-09_run09_post-run_synthesis.md
+- Log: logs/2026-02-09_run09_full-run-log.md
+- Archive notes: archives/2026-02-09_run09_archive-notes.md
