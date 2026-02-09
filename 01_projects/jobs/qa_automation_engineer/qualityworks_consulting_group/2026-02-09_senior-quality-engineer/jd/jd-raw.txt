@@ -1,0 +1,36 @@
+Full job description
+Job Title: Senior Quality Engineer - Test Automation
+
+Location: Remote (with monthly on-site travel)
+
+Job Type: Full-time
+
+
+About Us:
+
+QualityWorks is a full-service technology consultancy that empowers businesses through smarter testing, innovative solutions, and a collaborative approach. We are looking for a Senior Quality Engineer with a strong background in test automation to join our dynamic team.
+
+
+Job Description:
+
+As a Senior Quality Engineer specializing in test automation, you will play a critical role in ensuring the quality and reliability of our software solutions. You will be responsible for designing, implementing, and maintaining automated test frameworks, with a particular emphasis on Playwright (preferred) and Cypress.
+
+In addition to building automation frameworks, you will create detailed manual test cases that serve as the foundation for automation. These tests will often need to be executed manually during the development process to validate functionality, provide rapid feedback, and ensure accuracy before automation is applied. This approach ensures robust coverage and a clear pathway from manual validation to automated execution.
+
+
+Key Responsibilities:
+
+Develop and execute automated test scripts using Playwright.
+Work independently on automation projects, taking ownership of end-to-end testing processes.
+Act as a consultant to clients, providing expert advice on quality assurance best practices and automation strategies.
+Lead small teams or project segments, demonstrating leadership in guiding junior engineers when necessary.
+Communicate effectively with both technical and non-technical stakeholders to ensure alignment on project goals and deliverables.
+
+Qualifications:
+
+Minimum of 3 years of experience in test automation using Playwright (preferred) and/or Cypress.
+Proven ability to work independently and manage multiple testing projects simultaneously.
+Experience in a consulting environment is a plus.
+Strong leadership skills with the capability to guide and mentor team members.
+Excellent communication skills, both written and verbal.
+Must be legally authorized to work in the United States.
