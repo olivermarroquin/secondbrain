@@ -20,7 +20,9 @@ def print_diff(proposals: List[Dict[str, Any]]) -> None:
         before = p.get("before") or []
         after = p.get("after") or []
 
-        print(f"{i}. [{sec}] {op}")
+        rr = p.get("subsection_occurrence")
+        rr_tag = f" (RR#{rr})" if rr else ""
+        print(f"{i}. [{sec}] {op}{rr_tag}")
         if rationale:
             print(f"   why: {rationale}")
 

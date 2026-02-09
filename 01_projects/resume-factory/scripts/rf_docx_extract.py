@@ -131,6 +131,40 @@ def format_numbered_blocks_for_prompt(
 
     line_index: Dict[str, Dict[str, str]] = {}
 
+
+    # R&R occurrence labeling inside EXPERIENCE (optional metadata; refs unchanged)
+    rr_occ = 0
+    in_rr = False
+
+    def _is_rr_marker(line: str) -> bool:
+        tl = (line or "").strip().lower()
+        tl = tl.replace("&", "and")
+        tl = re.sub(r"\s+", " ", tl)
+        tl = tl.rstrip(":").strip()
+        return tl == "roles and responsibilities" or tl.startswith("roles and responsibilities")
+
+    def _is_job_boundary(line: str) -> bool:
+        tl = (line or "").strip().lower()
+        tl2 = tl.rstrip(":")
+        if re.search(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b.*\b\d{4}\b\s*[-–—]{1,2}\s*(?:present|\b\d{4}\b)", tl2):
+            return True
+        if re.search(r"\b\d{4}\b\s*[-–—]{1,2}\s*(?:present|\b\d{4}\b)", tl2) and len(tl2) <= 120:
+            return True
+        return False
+
+    def _rr_meta_for_experience_line(line: str) -> dict:
+        nonlocal rr_occ, in_rr
+        t = (line or "").strip()
+        if _is_job_boundary(t):
+            in_rr = False
+            return {}
+        if _is_rr_marker(t):
+            rr_occ += 1
+            in_rr = True
+            return {}
+        if in_rr and rr_occ > 0:
+            return {"subsection": "ROLES_AND_RESPONSIBILITIES", "subsection_occurrence": str(rr_occ)}
+        return {}
     def emit(section: str, prefix: str, block: List[str]) -> str:
         out: List[str] = []
         n = 0
@@ -141,6 +175,9 @@ def format_numbered_blocks_for_prompt(
             n += 1
             ref = f"{prefix}{n:03d}"
             line_index[ref] = {"section": section, "text": line}
+            # Optional subsection metadata (safe extension; refs unchanged)
+            if section == "EXPERIENCE":
+                line_index[ref].update(_rr_meta_for_experience_line(line))
             out.append(f"{ref} | {line}")
         return "\n".join(out).strip()
 
