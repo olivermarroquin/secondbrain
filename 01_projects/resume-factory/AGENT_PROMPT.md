@@ -82,15 +82,16 @@ These rules are **job-family agnostic** and apply to all roles.
    - Keep bullets roughly the same length as the original line (±25%) unless the JD demands a clearly necessary addition.
    - Prefer one strong sentence over two weak ones.
 
-4) **Truthfulness**
-   - Do not invent tools or claims not supported by the template resume content.
-   - If the JD asks for something not present in the resume, you may add it only if it is strongly implied by existing experience; otherwise note it in rewrite_packet.notes as a gap/risk.
+4) **Rewrite freedom (ChatGPT-style)**
+   - You MAY rewrite aggressively when the JD clearly implies a domain/workflow focus.
+   - You MAY add JD-relevant tools/keywords even if not in the template text (assume the candidate has relevant experience).
+   - Do not invent new employers, roles, or projects.
 
-5) **Target only what matters**
-   - Do NOT rewrite everything. Select the most leverage changes:
-     - Summary: align positioning + top 6–10 keywords without bloating.
-     - Skills: tighten for ATS; keep categories; do not delete relevant tools.
-     - Experience: prefer replacing 5–12 bullets that best improve alignment.
+5) **Priorities**
+   - Prefer domain/workflow framing over tool lists.
+   - Summary: rewrite to reflect the JD’s business flows.
+   - Skills: add/reshape categories to match the JD.
+   - Experience: rewrite bullets to reflect ownership of the workflows; tools support the story.
 
 6) **Format**
    - Experience bullets must start with “• ”.
@@ -196,10 +197,7 @@ D) Substitute, then demonstrate (paradigm-aware rewriting)
     while preserving the original metric/scope (e.g., “200+”, “90%”, “70%”).
 - No shallow noun swaps.
 
-E) Preserve top-signal; rewrite weakest first
-- Do not rewrite bullets that already align strongly with the JD.
-- Prefer rewriting the lowest-signal bullets first (generic, low-tool, low-metric),
-  and only add/replace where it increases alignment measurably.
+# Removed: weakest-first constraint (allows broad reframes when JD warrants)
 
 
 # Edit Semantics Rules (ADD / DELETE / REPLACE)
@@ -254,31 +252,10 @@ Any tool emphasized in SUMMARY must also appear in SKILLS and EXPERIENCE.
 
 Avoid keyword dumping: add only what you can “cash” with at least one concrete usage line.
 
-## Stack Decision & Consistency Rules (CRITICAL)
+## Stack alignment (lightweight)
 
-These rules are REQUIRED to get ChatGPT-style tailoring quality.
-
-1) Choose the JD primary stack
-   - Determine the primary automation stack implied by the JD (tool + language), e.g.:
-     - Cypress + JavaScript/TypeScript
-     - Playwright + TypeScript
-     - Selenium + Java
-   - Treat that as the target stack for THIS tailored resume.
-
-2) Replace, don’t append
-   - If the JD primary stack conflicts with the template stack, replace conflicting references throughout summary/skills/experience.
-   - Example: if JD is Cypress, do not leave “Playwright” sprinkled everywhere. Swap to Cypress where it makes sense.
-
-3) Support every introduced tool
-   - Any new tool/tech added to SKILLS must appear in at least one rewritten EXPERIENCE bullet (or explicitly called out as a gap in rewrite_packet.notes).
-   - Any tool/tech emphasized in SUMMARY must also appear in SKILLS and EXPERIENCE.
-
-4) Keep substance while pivoting stack
-   - Preserve metrics and scope (e.g., “200+”, “90%”, “70%”), while translating tooling to match the JD stack.
-   - Do not compress detailed bullets into vague ones. If you replace Playwright with Cypress, keep the same level of technical detail.
-
-5) No mixed-stack unless JD explicitly calls for it
-   - Only keep multiple tools (e.g., Cypress + Playwright) if the JD clearly asks for both.
+- Prefer the JD stack when present, but do NOT force tool swaps that degrade narrative.
+- Mixed stacks are allowed if it reads natural and supports credibility.
 
 ## What “done” looks like
 - Summary reads like a strong ChatGPT rewrite: ATS-aligned but specific.
