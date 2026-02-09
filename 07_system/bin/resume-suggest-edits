@@ -329,20 +329,9 @@ def main():
                     if ":" in after0:
                         after0 = after0.split(":", 1)[0].strip() + ": " + ", ".join([k for k in kept if k])
 
-            # If AFTER == BEFORE:
-            # - If category is NOT JD-relevant -> DELETE_LINE
-            # - Else -> KEEP (emit nothing)
+            # If AFTER == BEFORE: KEEP (do not auto-delete skills lines based on heuristic relevance)
             if (after0 or "").strip() == (before or "").strip():
-                if not _jd_relevant_skill_line(before):
-                    proposals.append({
-                        "section": "SKILLS",
-                        "op": "DELETE_LINE",
-                        "before_ref": ref,
-                        "before": [before],
-                        "after": [""],
-                        "rationale": "Delete SKILLS category line (no change + not JD-relevant).",
-                    })
-                # else KEEP: do nothing
+                pass
             else:
                 proposals.append({
                     "section": "SKILLS",
@@ -364,39 +353,23 @@ def main():
                     "rationale": "Add new SKILLS category (category-aware).",
                 })
 
-    # 2) DELETE/KEEP: for existing categories not mentioned in rewrite output
-    # - If NOT JD-relevant => DELETE_LINE
-    # - If JD-relevant => KEEP (do nothing)
-    for lab, ref in existing_by_label.items():
-        if lab in used_labels:
-            continue
-        before_line = existing_line_by_label.get(lab, line_index.get(ref, {}).get("text", ""))
-        if not _jd_relevant_skill_line(before_line):
-            proposals.append({
-                "section": "SKILLS",
-                "op": "DELETE_LINE",
-                "before_ref": ref,
-                "before": [before_line],
-                "after": [""],
-                "rationale": "Remove non-JD-relevant SKILLS category (category-aware).",
-            })
-
 
 
     def _is_experience_header(ref: str) -> bool:
         line = (line_index.get(ref, {}) or {}).get("text", "").strip()
         if not line:
             return False
-        # Heuristic: block non-bullet structural lines inside EXPERIENCE (headers/labels)
-        if line.lower().strip() in {"professional experience:", "roles and responsibilities:"}:
-            return True
-        # Heuristic: headers contain role + org + date range and are not bullets
+        # Block non-bullet structural lines inside EXPERIENCE
         if line.startswith("•"):
             return False
-        # common date patterns
+        if line.lower().strip() in {"professional experience:", "roles and responsibilities:"}:
+            return True
+        # Headers usually contain dates (month names or years)
+        import re
         if re.search(r"(\bJan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec\b|\d{4})", line):
             return True
         return False
+
 
     # Compile EXPERIENCE replacements (explicit targets)
     exp_items = rewrite_packet.get("experience") or []

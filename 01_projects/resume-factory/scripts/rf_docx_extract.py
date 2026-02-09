@@ -54,6 +54,7 @@ def locate_sections(lines: List[str]) -> Tuple[List[str], List[str], List[str], 
     idx_prof = None
     idx_tech = None
     idx_exp = None
+    idx_edu = None
 
     for i, t in enumerate(lines):
         tl = t.strip().lower()
@@ -63,6 +64,9 @@ def locate_sections(lines: List[str]) -> Tuple[List[str], List[str], List[str], 
             continue
         if idx_tech is None and (("technical skill" in tl2) or tl2 in ("skills", "technical skills")):
             idx_tech = i
+            continue
+        if idx_edu is None and tl2 in ("education",):
+            idx_edu = i
             continue
         if idx_exp is None:
             if tl2 in ("experience", "professional experience", "work experience"):
@@ -84,7 +88,10 @@ def locate_sections(lines: List[str]) -> Tuple[List[str], List[str], List[str], 
 
     header = trim(lines[:idx_prof])
     summary = trim(lines[idx_prof:idx_tech])
-    skills = trim(lines[idx_tech:idx_exp])
+    skills_end = idx_exp
+    if idx_edu is not None and idx_tech is not None and idx_edu > idx_tech:
+        skills_end = min(skills_end, idx_edu)
+    skills = trim(lines[idx_tech:skills_end])
     exp = trim(lines[idx_exp:])
     return header, summary, skills, exp
 
