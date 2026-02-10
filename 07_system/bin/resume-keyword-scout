@@ -99,6 +99,23 @@ def main():
         timeout_s=int(__import__("os").environ.get("RF_OPENAI_TIMEOUT_S", "90")),
     )
 
+    # If the model returns the minimum (10), retry once to get a fuller list.
+    try:
+        kw = data.get("keywords_tools_ranked", []) if isinstance(data, dict) else []
+        flows = data.get("implied_responsibilities_flows", []) if isinstance(data, dict) else []
+    except Exception:
+        kw, flows = [], []
+
+    if len(kw) < 16 or len(flows) < 5:
+        data = keyword_scout_openai(
+            jd_raw=jd_raw,
+            baseline_text=baseline_text,
+            baseline_covered_terms=baseline_covered_terms,
+            model=None,
+            timeout_s=int(__import__("os").environ.get("RF_OPENAI_TIMEOUT_S", "90")),
+            extra_instructions="Return 18–20 keywords/tools and 6–7 implied responsibilities/flows. Prefer specific tool names exactly as written in the JD when available. Do not include baseline terms unless truly critical.",
+        )
+
     ok, msg = validate_keyword_scout(data)
     if not ok:
         # Debug artifact: write the invalid payload for inspection (do not silently mutate)

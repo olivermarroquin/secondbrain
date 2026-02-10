@@ -8,6 +8,62 @@ from typing import Any, Dict, Optional
 from openai import OpenAI
 from openai import RateLimitError, AuthenticationError
 
+def _keyword_scout_json_schema() -> dict:
+    return {
+        "name": "keyword_scout",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["keywords_tools_ranked", "implied_responsibilities_flows", "notes"],
+            "properties": {
+                "keywords_tools_ranked": {
+                    "type": "array",
+                    "minItems": 10,
+                    "maxItems": 20,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["term", "type", "why", "evidence"],
+                        "properties": {
+                            "term": {"type": "string"},
+                            "type": {"type": "string", "enum": ["keyword", "tool"]},
+                            "why": {"type": "string"},
+                            "evidence": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 3,
+                                "items": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "implied_responsibilities_flows": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 7,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["flow", "why", "evidence"],
+                        "properties": {
+                            "flow": {"type": "string"},
+                            "why": {"type": "string"},
+                            "evidence": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 3,
+                                "items": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "notes": {"type": "string"},
+            },
+        },
+        "strict": True,
+    }
+
+
 def _env(name: str, default: Optional[str] = None) -> Optional[str]:
     v = os.environ.get(name)
     return v if (v is not None and v != "") else default
@@ -25,6 +81,7 @@ def keyword_scout_openai(
     baseline_covered_terms: Optional[list] = None,
     model: Optional[str] = None,
     timeout_s: int = 90,
+    extra_instructions: str = "",
 ) -> Dict[str, Any]:
     _require("OPENAI_API_KEY")
     client = OpenAI(timeout=timeout_s)
@@ -39,6 +96,7 @@ OUTPUT RULES:
 
 - Return STRICT JSON ONLY (no markdown, no commentary).
 - Choose the BEST 10–20 keywords/tools that are PRESENT IN THE JOB DESCRIPTION.
+- Prefer SPECIFIC tool names as written in the JD (e.g., 'JMeter', 'App Scan', 'Twistlock') over generic categories like 'Load Testing' or 'Security Testing'.
 - You are unconstrained in judgment: pick what matters most for this role.
 - For every item, include evidence: short exact phrases copied from the JD (1–3 snippets).
 
@@ -69,7 +127,43 @@ BASELINE COVERED TERMS (hint list; don't over-index on them):
 {covered_terms}
 
 TASK:
-Return the JSON contract. Pick the best 10–20 keywords/tools and 3–7 implied responsibilities/flows."""
+Return the JSON contract. Pick the best 10–20 keywords/tools and 3–7 implied responsibilities/flows.
+
+EXTRA INSTRUCTIONS:
+{extra_instructions}"""
+    # If the model returns almost-JSON with a tiny syntax slip, do ONE deterministic repair pass.
+    # This does not change content; it only fixes JSON validity.
+    def _repair_json_once(bad_text: str) -> str:
+        repair_system = """You are a JSON repair bot.
+RULES:
+- Output STRICT JSON ONLY.
+- Do NOT add new items or remove items.
+- Do NOT change meaning.
+- Only fix JSON syntax/escaping/commas/quotes to make it valid JSON that matches the contract.
+"""
+        repair_user = f"""JSON_REPAIR_TASK:
+Fix this into valid JSON (same structure/content; syntax repair only):
+
+{bad_text}
+"""
+        r = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": repair_system.strip()},
+                {"role": "user", "content": repair_user.strip()},
+            ],
+        )
+        out = ""
+        for o in r.output:
+            for c in o.content:
+                if c.type == "output_text":
+                    out += c.text
+        out = (out or "").strip()
+        m = re.match(r"^```(?:json)?\s*(.*?)\s*```\s*$", out, flags=re.DOTALL | re.IGNORECASE)
+        if m:
+            out = m.group(1).strip()
+        return out
+
     try:
         resp = client.responses.create(
             model=model,
@@ -102,8 +196,13 @@ Return the JSON contract. Pick the best 10–20 keywords/tools and 3–7 implied
 
     try:
         data = json.loads(t)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"OpenAI response was not valid JSON:\n{text}") from e
+    except json.JSONDecodeError:
+        # one-shot repair
+        fixed = _repair_json_once(text)
+        try:
+            data = json.loads(fixed)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"OpenAI response was not valid JSON (even after repair):\n{text}") from e
 
     if not isinstance(data, dict):
         raise RuntimeError("Invalid response: top-level must be an object")
