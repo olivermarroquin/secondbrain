@@ -1,16 +1,16 @@
 {
   "schema": "rf_signals_v2",
-  "template_id": "04",
-  "template_slug": "04_typescript_playwright",
+  "template_id": "05",
+  "template_slug": "05_typescript_cypress",
   "family": "qa_automation_engineer",
   "primary_stack": {
     "language": "typescript",
-    "automation_tool": "playwright"
+    "automation_tool": "cypress"
   },
   "preferred_keywords": [
     "typescript",
     "javascript",
-    "playwright",
+    "cypress",
     "node",
     "npm",
     "ui automation",
@@ -21,13 +21,14 @@
     "api testing",
     "postman",
     "sql",
-    "docker"
+    "docker",
+    "cypress"
   ],
   "anti_signals": [
     "java (only)",
     "python (only)",
-    "cypress",
+    "playwright",
     "selenium"
   ],
-  "notes": "Pick when TS/JS Playwright is the clear ask (JetBrains-style stacks)."
+  "notes": "Pick when TS/JS Cypress is the clear ask."
 }

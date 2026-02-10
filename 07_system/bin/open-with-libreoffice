@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+/Applications/LibreOffice.app/Contents/MacOS/soffice \
+  --writer \
+  --nologo \
+  --norestore \
+  --nodefault \
+  --nofirststartwizard \
+  "$@"

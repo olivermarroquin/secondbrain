@@ -102,8 +102,20 @@ def apply_replace_line(doc, before_line: str, after_line: str) -> bool:
         if not tn:
             continue
 
-        # Case 1: exact paragraph match (normalized) -> replace whole paragraph, preserve formatting
+        # Case 1: exact paragraph match (normalized)
         if tn == b_n:
+            # Special-case: SKILLS lines often use 2 runs (bold label + normal values).
+            # If so, preserve that structure instead of collapsing to a single run.
+            if len(para.runs) == 2:
+                r0, r1 = para.runs[0], para.runs[1]
+                r0_text = (r0.text or "").strip()
+                if (r0.bold is True) and ((r1.bold is False) or (r1.bold is None)) and r0_text.endswith(":") and (":" in a_raw):
+                    label, rest = a_raw.split(":", 1)
+                    r0.text = label.strip() + ":"
+                    r1.text = " " + rest.strip()
+                    return True
+
+            # Default: replace whole paragraph, preserve formatting using first run as template
             tpl = para.runs[0] if para.runs else None
             for r in list(para.runs):
                 r.text = ""
