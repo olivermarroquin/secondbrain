@@ -4,27 +4,29 @@
 
 ## Professional Summary
 
-Seasoned Senior Java SDET with over 5 years of expertise in automation and manual testing for complex systems. Proven proficiency in developing and implementing scalable automation frameworks using Java, Selenium WebDriver, JUnit, and Jenkins, significantly enhancing test coverage for microservices and event-driven applications. Adept at crafting and executing integration and functional tests, leveraging continuous integration to ensure code reliability and performance. Experienced in Agile methodologies and diverse platforms, including databases, event-driven models, and microservices. Enthusiastic about delivering high-quality products through collaboration with engineers and stakeholders, ensuring adherence to 12-factor application principles.
+Experienced Senior SDET with over 7 years in automation testing, adept in Java and Selenium. Proven track record in building scalable test frameworks, ensuring comprehensive coverage across microservices and cloud environments. Excel in crafting unit, functional, and integration tests with tools like JUnit and Selenium WebDriver, and proficient in deploying CI/CD pipelines using Jenkins. Skilled in Agile methodologies and collaborating with cross-functional teams to deliver high-quality software solutions.
 
 ## Technical Skills
 
-Automation Frameworks: Selenium WebDriver, JUnit, TestNG, Cucumber
-Programming Languages: Java, Groovy, SQL
-Integration & Testing Types: Unit, Functional, Integration, Security Testing
-CI/CD & Tools: Jenkins, Maven, Git, JIRA
-Protocols & Networking: SFTP, Sockets, HTTPs, RPC
-Performance & Load Testing: JMeter, Load Runner, Load UI
-Security Tools: App Scan, Polaris, Twistlock
-Development Approaches: Microservices, Event Driven Applications
-Monitoring & Debugging: Logging, Monitoring, Code Coverage Tools
+Automation Frameworks: Selenium WebDriver, JUnit, TestNG
+Programming Languages: Java, Groovy
+Microservices & Protocols: REST, SFTP, HTTP
+Continuous Integration: Jenkins, Maven
+Databases: SQL Server, Oracle
+Security Testing Tools: App Scan, Polaris
+Performance Testing: JMeter, Load Runner
+Testing Types: Unit, Functional, Integration, Microservices
+Version Control: Git
+Agile Tools: JIRA
 
 ## Experience Edits (Rewrite Packet)
 
-- **E004** (REPLACE_LINE): • Engineered extensive test frameworks using Java, Selenium, and JUnit to ensure high test coverage across microservices, leading to 90% coverage success.
-- **E005** (REPLACE_LINE): • Improved automated test scripts for cross-platform performance validation using advanced Selenium and JUnit techniques, resulting in robust hybrid automation strategies.
-- **E010** (REPLACE_LINE): • Enhanced API testing automation using dynamic methods, and integrated security testing tools for comprehensive software quality.
-- **E021** (REPLACE_LINE): • Introduced security and chaos testing processes using leading tools to enforce strong testing protocols compatible with Java and Selenium developments.
+- **E007** (REPLACE_LINE): • Developed a robust microservices testing framework utilizing Java, Selenium WebDriver and JUnit, aligning with 12-factor app principles to achieve efficient test coverage.
+- **E010** (REPLACE_LINE): • Enhanced integration test strategies with complex test automation scripts, boosting testability across microservices in an Agile environment.
+- **E012** (REPLACE_LINE): • Conducted comprehensive testing using SFTP/HTTPs protocols; implemented security testing leveraging tools such as App Scan and Polaris.
+- **E026** (REPLACE_LINE): • Implemented continuous integration using Jenkins for automated testing of event-driven applications, enhancing reliability and performance.
+- **E024** (REPLACE_LINE): • Partnered with developers to ensure software performance and testability, implementing code coverage tools to increase conditional coverage.
 
 ## Notes
 
-Aligned updates with job description to highlight relevant tools and methodologies like microservices testing, security testing, and Java-focused automation skills.
+The focus was on integrating key job description elements such as microservices, protocols, and security testing tools. Replaced generic testing terms with specific frameworks and methods that align directly with the job description.

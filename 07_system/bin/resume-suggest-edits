@@ -279,70 +279,27 @@ def main():
     add_anchor_text = (line_index.get(add_anchor_ref, {}) or {}).get("text", "") if add_anchor_ref else ""
 
     used_labels = set()
-
-    # 1) Emit REPLACE_LINE when label exists; otherwise ADD_LINE (no category replacement)
+    # 1) Emit ALL model-provided SKILLS lines (model-authoritative)
     for ln in sk_lines:
         lab = _skill_label(ln)
         if not lab:
             continue
-        if lab in used_labels:
-            continue
-        used_labels.add(lab)
 
         if lab in existing_by_label:
             ref = existing_by_label[lab]
             before = line_index[ref]["text"]
             after0 = _preserve_bullet(before, ln)
 
-            # PRIMARY STACK substitution for Automation Frameworks:
-            # If JD is Cypress-primary and does not mention Playwright, drop Playwright (and vice-versa).
-            # This prevents "Playwright, Cypress" keyword dumping when JD wants one.
-            def _primary_tool() -> str:
-                if "cypress" in jd_norm:
-                    return "cypress"
-                if "playwright" in jd_norm:
-                    return "playwright"
-                if "selenium" in jd_norm:
-                    return "selenium"
-                return ""
-
-            if lab == "automation frameworks":
-                pt = _primary_tool()
-                if pt:
-                    parts = [x.strip() for x in after0.split(":", 1)[1].split(",")] if ":" in after0 else [after0]
-                    kept = []
-                    for t in parts:
-                        tl = t.lower()
-                        # keep if term matches primary tool, or JD explicitly mentions it, or it's a non-competing staple in JD
-                        if pt in tl:
-                            kept.append(t)
-                            continue
-                        if t.lower() in jd_norm:
-                            kept.append(t)
-                            continue
-                        # Competing stack removal: drop Playwright when Cypress-primary unless JD mentions Playwright, and vice versa
-                        if pt == "cypress" and "playwright" in tl and "playwright" not in jd_norm:
-                            continue
-                        if pt == "playwright" and "cypress" in tl and "cypress" not in jd_norm:
-                            continue
-                        kept.append(t)
-                    if ":" in after0:
-                        after0 = after0.split(":", 1)[0].strip() + ": " + ", ".join([k for k in kept if k])
-
-            # If AFTER == BEFORE: KEEP (do not auto-delete skills lines based on heuristic relevance)
-            if (after0 or "").strip() == (before or "").strip():
-                pass
-            else:
-                proposals.append({
-                    "section": "SKILLS",
-                    "op": "REPLACE_LINE",
-                    "before_ref": ref,
-                    "before": [before],
-                    "after": [after0],
-                    "rationale": f"Rewrite packet skills update for {ref} (category-aware).",
-                })
+            proposals.append({
+                "section": "SKILLS",
+                "op": "REPLACE_LINE",
+                "before_ref": ref,
+                "before": [before],
+                "after": [after0],
+                "rationale": f"Rewrite packet skills update for {ref} (model-driven).",
+            })
         else:
-            # New category: add it after the last skills line (or skip if we have no anchor)
+            # Always ADD new categories emitted by the model
             if add_anchor_text:
                 proposals.append({
                     "section": "SKILLS",
@@ -350,7 +307,7 @@ def main():
                     "before_ref": add_anchor_ref,
                     "before": [add_anchor_text],
                     "after": [ln],
-                    "rationale": "Add new SKILLS category (category-aware).",
+                    "rationale": "Add new SKILLS category (model-driven).",
                 })
 
 
@@ -420,9 +377,15 @@ def main():
         if not before_ref or before_ref not in line_index:
             continue
 
-        if before_ref in used_before_refs:
-            continue
-        used_before_refs.add(before_ref)
+        # Allow multiple ADD_LINE insertions after the same anchor ref.
+        # Only dedupe by before_ref for non-ADD ops (REPLACE_LINE, etc).
+        if op != "ADD_LINE":
+            # Allow multiple ADD_LINE insertions after the same anchor ref.
+            # Only dedupe by before_ref for non-ADD ops.
+            if op != "ADD_LINE":
+                if before_ref in used_before_refs:
+                    continue
+                used_before_refs.add(before_ref)
 
         expected_before = line_index[before_ref]["text"]
 
