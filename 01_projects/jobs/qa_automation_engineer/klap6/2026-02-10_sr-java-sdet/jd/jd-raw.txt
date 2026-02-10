@@ -1,0 +1,48 @@
+Full job description
+Company Description
+
+ABOUT US
+Klap6 is a young company spearheaded by experienced, industry-recognized professionals. That is how we like to describe us.
+
+Since its very inception, Klap6 has been solely engaged in IT staffing and recruiting services, our clients being among the most successful organizations in technology and services panning across industries. We have partnered with organizations in the Technology, Product Engineering, HR, Sales Hiring, Healthcare, Technical, Telecommunications, Financial, and Energy and Utilities industries.
+
+
+Job Description
+
+Please share me your resume to Arun.k(at)klap6(dot)com
+
+Job Details
+Java SDET Testing
+1 Year Contract
+San Antonio, TX (100% Remote)
+
+
+Work closely with software engineers to build quality by ensuring proper test and conditional coverage, configuration quality, logging and monitoring.
+Develop and implement QA standards, processes, tools and methodologies;
+Partner with other functions to establish testing requirements for microservices with principles of 12 factor applications adherence.
+Document functional/integration test strategies and test plans; translate complex system requirements and specs into test requirements and testing methods
+Participate in feature/story elaboration, Identify and implements complex automation efforts
+
+Must have 5+ year of experience and should have hands on experience on the below listed skillset.
+
+Experience in Unit, Functional and Integration testing.
+Exposure in building and using automation frameworks using technologies: Java, JUnit or JBehave.
+Experience testing across a variety of platforms: Microservices, Event Driven Applications, and Databases
+Ability to create good acceptance and integration test automation scripts and integrate with Continuous integration (Jenkins) and code coverage tools to ensure higher code/conditional coverage.
+Experience in working in Agile Methodology.
+Experienced in different protocols testing (SFTP/sockets/HTTPs/RPC..etc).
+Experience of working with other developers to ensure that systems are designed for reliability, performance and testability.
+
+Preferred Skills
+Application development experience Using Java.
+Security Testing experience using security test tool.
+Hands on experience in Java scripting, Groovy
+Hands on experience in Chaos Testing
+Exposure to Software Engineering Principles.
+
+Technology Skills
+Selenium RS/Webdriver
+Load UI, Load Runner, JMeter, Karate tool etc
+App Scan, Polaris, Twistlock
+Security/Integrity testing
+Attest Jaws, Contrast Color Analyzer, Cyara, Talkback, Voiceover
