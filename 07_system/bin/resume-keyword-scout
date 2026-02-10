@@ -44,6 +44,27 @@ def extract_baseline_covered_terms(text: str, limit: int = 120):
     return out
 
 
+
+    
+def dedupe_keywords_tools_ranked(items):
+    """Deterministically remove duplicate terms (case-insensitive). Keep first occurrence."""
+    if not isinstance(items, list):
+        return items
+    seen = set()
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        term = str(it.get("term", "")).strip()
+        if not term:
+            continue
+        key = re.sub(r"\s+", " ", term).strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(it)
+    return out
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app", required=True)
@@ -90,7 +111,6 @@ def main():
                 baseline_covered_terms = extract_baseline_covered_terms(baseline_text, limit=120)
         except Exception as e:
             die(f"failed reading baseline from selected-template.json: {e}")
-
     data = keyword_scout_openai(
         jd_raw=jd_raw,
         baseline_text=baseline_text,
@@ -116,6 +136,7 @@ def main():
             extra_instructions="Return 18–20 keywords/tools and 6–7 implied responsibilities/flows. Prefer specific tool names exactly as written in the JD when available. Do not include baseline terms unless truly critical.",
         )
 
+    data['keywords_tools_ranked'] = dedupe_keywords_tools_ranked(data.get('keywords_tools_ranked', []))
     ok, msg = validate_keyword_scout(data)
     if not ok:
         # Debug artifact: write the invalid payload for inspection (do not silently mutate)
