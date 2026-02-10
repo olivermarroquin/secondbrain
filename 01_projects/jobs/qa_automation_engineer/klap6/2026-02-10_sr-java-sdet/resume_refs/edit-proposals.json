@@ -1,0 +1,110 @@
+{
+  "app": "01_projects/jobs/qa_automation_engineer/klap6/2026-02-10_sr-java-sdet",
+  "generated_at": "2026-02-10T19:19:25.087550+00:00",
+  "job": {
+    "company": "klap6",
+    "role_title": "Sr Java Sdet",
+    "date_found": "2026-02-10"
+  },
+  "selected_template": "01_java_selenium",
+  "narrative": "Aligned updates with job description to highlight relevant tools and methodologies like microservices testing, security testing, and Java-focused automation skills.",
+  "proposals": [
+    {
+      "section": "SUMMARY",
+      "op": "REPLACE_LINE",
+      "before_ref": "S002",
+      "before": [
+        "Dynamic and results-driven Senior Quality Assurance Engineer / SDET with over 7 years of extensive experience in manual and automation testing for web-based applications. Proven expertise in architecting and implementing scalable Selenium frameworks that reduced testing time by 70% and enhanced testing accuracy. Adept at CI/CD integration, cloud testing, and shift-left testing strategies, delivering robust automation solutions using Selenium WebDriver/IDE/GRID, Java, TestNG, and Maven. Adept at preparing effort estimations, test strategies/plans, and automation scripts for comprehensive test coverage and high-quality product delivery. Proficient in designing XML-based test suites, integrating them into Jenkins Server for continuous testing, and leveraging Apache Maven for efficient project builds. Proficient in cross-browser testing, distributed test execution, and utilizing tools like Jenkins, Git, and JIRA for seamless testing, defect management and collaboration. Expertise in database testing across SQL Server, Oracle, and other RDBMS platforms, ensuring end-to-end quality assurance. Collaborative team player with a strong ability to lead, mentor, and adapt to dynamic environments in Agile settings."
+      ],
+      "after": [
+        "Seasoned Senior Java SDET with over 5 years of expertise in automation and manual testing for complex systems. Proven proficiency in developing and implementing scalable automation frameworks using Java, Selenium WebDriver, JUnit, and Jenkins, significantly enhancing test coverage for microservices and event-driven applications. Adept at crafting and executing integration and functional tests, leveraging continuous integration to ensure code reliability and performance. Experienced in Agile methodologies and diverse platforms, including databases, event-driven models, and microservices. Enthusiastic about delivering high-quality products through collaboration with engineers and stakeholders, ensuring adherence to 12-factor application principles."
+      ],
+      "rationale": "Rewrite packet summary update for S002."
+    },
+    {
+      "section": "SKILLS",
+      "op": "REPLACE_LINE",
+      "before_ref": "K002",
+      "before": [
+        "Automation Frameworks: Selenium WebDriver, Cucumber, TestNG, JUnit, Rest Assured"
+      ],
+      "after": [
+        "Automation Frameworks: Selenium WebDriver, JUnit, TestNG, Cucumber"
+      ],
+      "rationale": "Rewrite packet skills update for K002 (category-aware)."
+    },
+    {
+      "section": "SKILLS",
+      "op": "REPLACE_LINE",
+      "before_ref": "K003",
+      "before": [
+        "Programming Languages: Java, Python, SQL"
+      ],
+      "after": [
+        "Programming Languages: Java, Groovy, SQL"
+      ],
+      "rationale": "Rewrite packet skills update for K003 (category-aware)."
+    },
+    {
+      "section": "SKILLS",
+      "op": "ADD_LINE",
+      "before_ref": "K011",
+      "before": [
+        "Monitoring Tools: Grafana, Datadog, ELK Stack, JMeter"
+      ],
+      "after": [
+        "Integration & Testing Types: Unit, Functional, Integration, Security Testing"
+      ],
+      "rationale": "Add new SKILLS category (category-aware)."
+    },
+    {
+      "section": "EXPERIENCE",
+      "op": "REPLACE_LINE",
+      "before_ref": "E004",
+      "before": [
+        "Architected and implemented a microservices testing framework using Java, Cucumber, and Rest Assured, achieving 90% test coverage across services."
+      ],
+      "after": [
+        "Engineered extensive test frameworks using Java, Selenium, and JUnit to ensure high test coverage across microservices, leading to 90% coverage success."
+      ],
+      "rationale": "Rewrite packet experience update for E004."
+    },
+    {
+      "section": "EXPERIENCE",
+      "op": "REPLACE_LINE",
+      "before_ref": "E005",
+      "before": [
+        "Parameterized automated test scripts to validate application performance across multiple browsers and diverse datasets, playing a key role in developing robust hybrid automation frameworks with Java, Selenium, and TestNG."
+      ],
+      "after": [
+        "Improved automated test scripts for cross-platform performance validation using advanced Selenium and JUnit techniques, resulting in robust hybrid automation strategies."
+      ],
+      "rationale": "Rewrite packet experience update for E005."
+    },
+    {
+      "section": "EXPERIENCE",
+      "op": "REPLACE_LINE",
+      "before_ref": "E010",
+      "before": [
+        "Enhanced REST API automation scripts with dynamic helper methods, contributing to seamless API testing processes."
+      ],
+      "after": [
+        "Enhanced API testing automation using dynamic methods, and integrated security testing tools for comprehensive software quality."
+      ],
+      "rationale": "Rewrite packet experience update for E010."
+    },
+    {
+      "section": "EXPERIENCE",
+      "op": "REPLACE_LINE",
+      "before_ref": "E021",
+      "before": [
+        "Integrated automated accessibility testing tools (WAVE, Axe) to ensure compliance with WCAG 2.1 standards."
+      ],
+      "after": [
+        "Introduced security and chaos testing processes using leading tools to enforce strong testing protocols compatible with Java and Selenium developments."
+      ],
+      "rationale": "Rewrite packet experience update for E021."
+    }
+  ],
+  "notes": "READ-ONLY proposals. Approve with resume-approve-edits."
+}
