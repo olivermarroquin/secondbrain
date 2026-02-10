@@ -1,0 +1,127 @@
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
+import argparse, json, re
+from pathlib import Path
+from datetime import datetime, timezone
+
+def die(msg: str, code=1):
+    print(f"ERROR: {msg}")
+    raise SystemExit(code)
+
+def norm(s: str) -> str:
+    s = (s or "").lower()
+    s = s.replace("\u2019", "'")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+def load_json(p: Path):
+    try:
+        return json.loads(p.read_text())
+    except Exception as e:
+        die(f"invalid JSON: {p} ({e})")
+
+def extract_baseline_covered_terms(text: str, limit: int = 120):
+    """
+    Heuristic, deterministic "already covered" term harvest from baseline resume text.
+    Not a ruleset; just a compact hint list to nudge the model toward differentiators.
+    """
+    t = (text or "")
+    # Pull likely tech tokens: letters/digits plus . + # - / (keeps e.g., C#, CI/CD, JUnit, REST, SFTP)
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9\.\+#/\-]{1,}", t)
+    # Deduplicate case-insensitively but keep first-seen casing
+    seen = set()
+    out = []
+    for tok in tokens:
+        key = tok.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        # drop ultra-generic short tokens
+        if len(tok) <= 2 and tok.lower() not in {"c#", "ci"}:
+            continue
+        out.append(tok)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--app", required=True)
+    ap.add_argument("--no-write", action="store_true")
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser()
+    if not app.is_dir():
+        die(f"app dir missing: {app}")
+
+    jd_p = app / "jd" / "jd-raw.txt"
+    jm_p = app / "tracking" / "job-meta.json"
+    if not jd_p.exists(): die(f"missing: {jd_p}")
+    if jd_p.stat().st_size == 0: die(f"jd-raw.txt empty: {jd_p}")
+    if not jm_p.exists(): die(f"missing: {jm_p}")
+
+    jd_raw = jd_p.read_text(errors="ignore")
+    jd_norm = norm(jd_raw)
+
+    scripts_dir = Path.home() / "secondbrain/01_projects/resume-factory/scripts"
+    if not scripts_dir.is_dir():
+        die(f"missing scripts dir: {scripts_dir}")
+    import sys
+    sys.path.insert(0, str(scripts_dir))
+
+    from rf_keyword_scout_client import keyword_scout_openai
+    from rf_keyword_scout_schema import validate_keyword_scout
+    from rf_docx_extract import read_docx_lines, locate_sections
+
+    # Baseline context defaults (always defined)
+    baseline_text = ""
+    baseline_covered_terms = []
+
+    # If resume-select was run, use selected template as baseline coverage hint
+    sel_p = app / "tracking" / "selected-template.json"
+    if sel_p.exists():
+        try:
+            sel = load_json(sel_p)
+            docx_p = Path(sel.get("resume_master_docx", "")).expanduser()
+            if docx_p.exists():
+                lines = read_docx_lines(docx_p)
+                header, summary, skills, exp = locate_sections(lines)
+                baseline_text = "\n".join([*summary, "", *skills]).strip()
+                baseline_covered_terms = extract_baseline_covered_terms(baseline_text, limit=120)
+        except Exception as e:
+            die(f"failed reading baseline from selected-template.json: {e}")
+
+    data = keyword_scout_openai(
+        jd_raw=jd_raw,
+        baseline_text=baseline_text,
+        baseline_covered_terms=baseline_covered_terms,
+        model=None,
+        timeout_s=int(__import__("os").environ.get("RF_OPENAI_TIMEOUT_S", "90")),
+    )
+
+    ok, msg = validate_keyword_scout(data)
+    if not ok:
+        # Debug artifact: write the invalid payload for inspection (do not silently mutate)
+        dbg_p = app / "notes" / "keyword-scout.invalid.json"
+        dbg_p.parent.mkdir(parents=True, exist_ok=True)
+        dbg_p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        die(f"keyword-scout schema invalid: {msg} (wrote {dbg_p})")
+
+    out = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "app": str(app),
+        "job_meta": load_json(jm_p),
+        "keyword_scout": data,
+    }
+
+    out_p = app / "notes" / "keyword-scout.json"
+    if args.no_write:
+        print(json.dumps(out, indent=2))
+        return
+
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    out_p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    print(f"WROTE: {out_p}")
+
+if __name__ == "__main__":
+    main()

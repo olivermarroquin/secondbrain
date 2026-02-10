@@ -56,6 +56,25 @@ def score(sig: dict, text: str):
 
     return sc, hits_pref, hits_neut, hits_anti, lang, tool
 
+def write_selected_template(app: Path, family: str, best_row: tuple):
+    # best_row shape: (score, tid, slug, folder, hp, hn, ha, lang, tool, sig)
+    folder = best_row[3]
+    sig = best_row[9] or {}
+    out = {
+        "family": family,
+        "template_id": sig.get("template_id"),
+        "template_slug": sig.get("template_slug", folder.name),
+        "template_folder_name": folder.name,
+        "template_path": str(folder),
+        "resume_master_docx": str(folder / "resume-master.docx"),
+        "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+    }
+    p = app / "tracking" / "selected-template.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+    return p
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app", required=True, help="Application folder path")
@@ -115,6 +134,13 @@ def main():
     print(f"- template_id: {best[1]}")
     print(f"- template_slug: {best[2]}")
     print(f"- template_path: {best[3]}")
+    # Persist selection for downstream commands (keyword scout / ideal / mapper)
+    try:
+        sel_p = write_selected_template(app, args.family, best)
+        print(f"\nWROTE: {sel_p}")
+    except Exception as e:
+        die(f"failed to write selected-template.json: {e}")
+
 
 if __name__ == "__main__":
     main()

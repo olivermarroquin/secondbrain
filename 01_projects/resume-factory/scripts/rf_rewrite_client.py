@@ -88,11 +88,21 @@ def generate_rewrite_packet_openai(
     model: Optional[str] = None,
     max_proposals: int = 16,
     timeout_s: int = 90,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
 ) -> Dict[str, Any]:
     _require("OPENAI_API_KEY")
 
     client = OpenAI(timeout=timeout_s)
     model = model or _env("RF_OPENAI_MODEL", "gpt-4o-mini")
+
+    # Determinism controls (env-overridable)
+    # Defaults: temperature=0 (more deterministic), top_p=1
+    if temperature is None:
+        temperature = float(_env("RF_OPENAI_TEMPERATURE", "0"))
+    if top_p is None:
+        top_p = float(_env("RF_OPENAI_TOP_P", "1"))
+
     rf_prompt = _load_rf_prompt()
 
     primary_stack = _detect_primary_stack(jd_raw)
@@ -157,6 +167,8 @@ Generate a rewrite packet only (v0 contract). Do not generate proposals; the CLI
     try:
         resp = client.responses.create(
             model=model,
+            temperature=temperature,
+            top_p=top_p,
             input=[
                 {"role": "system", "content": system_prompt.strip()},
                 {"role": "user", "content": user_prompt.strip()},
