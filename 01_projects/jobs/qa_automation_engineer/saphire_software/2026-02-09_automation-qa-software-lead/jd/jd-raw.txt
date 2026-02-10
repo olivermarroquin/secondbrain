@@ -1,0 +1,35 @@
+Full job description
+SapphireK12 is a leader in providing enterprise level administrative software to the K-12 education community. Our award winning company continues to expand, and we are currently seeking an experienced Automation QA Lead to join our Product Team.
+
+If you are interested in joining an exciting, innovative team committed to delivering superior software for K-12 educators, and want to make a positive impact on students lives, this role is for you. We want fun, energetic and inventive professionals that aspire to become part of our fast-growing organization.
+
+The Automation QA Lead will oversee software quality by designing, implementing, and maintaining automated test scripts, and acting as a bridge between technical execution and strategic planning.
+
+Automation QA Lead responsibilities include:
+
+Develop and maintain automation test plans and automation strategies.
+Communicate feature interaction problems, track defects and verify fixes.
+Proficiency in (Java, Python and Java Script)
+Experience in utilizing frameworks such as Cypress and Selenium.
+Create detailed, clear and well-structured test plans, execute test cases and test scripts on multiple projects of varying sizes.
+Apply repetitive testing of functions within various browsers and/or devices
+Coaching and mentoring QA engineers and software testers.
+Create appropriate SOP's and support documentation.
+Work collaboratively with other departments.
+Requirements for this position include:
+
+Demonstrated track record of innovative thinking, technical mastery and peer guidance
+Ability to consistently create and drive the automated testing process
+Ability and willingness to learn new technologies
+Superior analytical, strategic and problem-solving capabilities
+Excellent organizational and leadership skills
+Proficient communication and interpersonal abilities to communicate effectively across departments
+Bachelor's Degree in Computer Science or related field
+Demonstrated knowledge of the following technologies: Selenium, Cucumber, Java
+Minimum of 5 years’ experience in automated testing environment
+Agile Testing Automation Certification a plus
+Located in Allentown, PA our offices embrace a unique team that delivers and supports the largest best in class integrated software solution for the K-12 industry. We are looking for new team members who are interested in a long-term career, not just a job. The company continues to grow and serves clients in the Northeast US.
+
+We offer competitive market salaries, have an extremely generous medical, dental, vision, short-term disability benefits package that is uncommon in the marketplace today. We offer training opportunities when they are available and applicable.
+
+So, if you are looking for a growing company, that truly cares about it's employees and are eager to bring innovation to a workplace, then apply for this job!
