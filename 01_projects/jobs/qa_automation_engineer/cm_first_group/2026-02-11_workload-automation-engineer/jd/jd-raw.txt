@@ -1,0 +1,26 @@
+Full job description
+Job Overview
+We are seeking a detail-oriented Workload Automation Engineer with experience In Broadcom Atomic Automation and Control M. You must have a minimum of 2 years experience with 5+ years experience preferred. Your expertise will drive efficiency, reliability, and scalability in our customer's environments, empowering teams to deliver high-quality solutions rapidly.
+
+Responsibilities
+
+Collaborate with cross-functional teams to gather requirements and translate them into effective automation workflows aligned with business needs.
+Monitor system performance and troubleshoot issues related to job failures or delays, performing root cause analysis to identify underlying problems.
+Integrate workload automation processes with CI/CD pipelines to support continuous integration and deployment strategies.
+Requirements
+
+Proven experience with workload automation tools such as Control-M, Automic.
+Proficiency in database management using SQL (MySQL, Microsoft SQL Server) or PL/SQL for data analysis and troubleshooting.
+Understanding of system architecture concepts including service-oriented architecture (SOA), microservices, and cloud infrastructure (AWS/Azure).
+Strong analytical skills for performing root cause analysis and resolving complex system issues efficiently.
+Excellent communication skills to collaborate effectively with technical teams and stakeholders.
+Ability to adapt quickly to evolving technologies and prioritize tasks in a fast-paced environment. Join us as a Workload Automation Engineer and be part of a forward-thinking team that values innovation, efficiency, and continuous learning!
+Job Type: Contract
+
+Pay: $100.00 - $250.00 per hour
+
+Expected hours: 30 – 50 per week
+
+Experience:
+
+Atomic Automation: 2 years (Preferred)
