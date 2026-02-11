@@ -1,5 +1,5 @@
 #!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
-import argparse, json, os, re
+import argparse, json, os, re, subprocess
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -75,8 +75,11 @@ def main():
     ap.add_argument("--app", required=True)
     ap.add_argument("--template", default="auto", help="auto|template_id|template_slug")
     ap.add_argument("--diff", action="store_true", help="Show BEFORE/AFTER diffs (recommended)")
+    ap.add_argument("--mode", default="classic", choices=["classic","ideal"], help="classic (default) or ideal pipeline")
+    ap.add_argument("--refresh", action="store_true", help="Re-run scouts even if outputs exist")
     ap.add_argument("--family", default="qa_automation_engineer")
     ap.add_argument("--no-write", action="store_true", help="Do not write edit-proposals.json")
+    ap.add_argument("--from-latest", action="store_true", help="Use resume_refs/resume.docx instead of template resume-master.docx")
     args = ap.parse_args()
 
     app = Path(args.app).expanduser()
@@ -93,6 +96,46 @@ def main():
     jd_raw = jd_p.read_text(errors="ignore")
     jd_norm = norm(jd_raw)
 
+        # IDEAL MODE: thin orchestrator wrapper (does not change classic behavior)
+    if args.mode == "ideal":
+        # Ensure selected-template exists (or create it via resume-select)
+        sel_p = app / "tracking" / "selected-template.json"
+        if args.refresh and sel_p.exists():
+            try:
+                sel_p.unlink()
+            except Exception:
+                pass
+        if not sel_p.exists():
+            cmd = ["resume-select", "--app", str(app), "--family", args.family]
+            subprocess.run(cmd, check=True)
+
+        # keyword scout
+        ks_out = app / "notes" / "keyword-scout.json"
+        if args.refresh and ks_out.exists():
+            try:
+                ks_out.unlink()
+            except Exception:
+                pass
+        if not ks_out.exists():
+            subprocess.run(["resume-keyword-scout", "--app", str(app)], check=True)
+
+        # ideal profile
+        ip_out = app / "notes" / "ideal-profile.json"
+        if args.refresh and ip_out.exists():
+            try:
+                ip_out.unlink()
+            except Exception:
+                pass
+        if not ip_out.exists():
+            subprocess.run(["resume-ideal-profile", "--app", str(app)], check=True)
+
+        # map ideal edits -> edit-proposals.json
+        cmd = ["resume-map-ideal-edits", "--app", str(app)]
+        if args.diff:
+            cmd.append("--diff")
+        subprocess.run(cmd, check=True)
+        return
+
     family_root = Path.home() / "secondbrain/03_assets/templates/resumes" / args.family
     if not family_root.is_dir():
         die(f"template family root missing: {family_root}")
@@ -101,7 +144,14 @@ def main():
     sig = best["sig"]
     template_path = best["path"]
     template_folder_name = template_path.name
-    docx_path = template_path / "resume-master.docx"
+        # Determine resume source
+    if args.from_latest:
+        latest_resume = app / "resume_refs" / "resume.docx"
+        if not latest_resume.exists():
+            die(f"--from-latest specified but no resume found at: {latest_resume}")
+        docx_path = latest_resume
+    else:
+        docx_path = template_path / "resume-master.docx"
 
     scripts_dir = Path.home() / "secondbrain/01_projects/resume-factory/scripts"
     if not scripts_dir.is_dir():

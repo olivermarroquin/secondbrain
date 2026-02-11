@@ -97,6 +97,11 @@ OUTPUT RULES:
 - Return STRICT JSON ONLY (no markdown, no commentary).
 - Choose the BEST 10–20 keywords/tools that are PRESENT IN THE JOB DESCRIPTION.
 - Prefer SPECIFIC tool names as written in the JD (e.g., 'JMeter', 'App Scan', 'Twistlock') over generic categories like 'Load Testing' or 'Security Testing'.
+- The "type" field MUST be exactly either "keyword" or "tool".
+- Never use values like "protocol", "framework", "language", "technology", or any other label.
+- If the term is a tool name (e.g., JMeter, Jenkins, Twistlock), use "tool".
+- Everything else must use "keyword".
+
 - Prefer RARE / HIGH-SIGNAL tokens over generic QA nouns. High-signal = product/tool names, protocols (SFTP/HTTPs/RPC/sockets), accessibility tooling, security scanners, exact framework names, '12 factor applications'.
 - Generic terms (e.g., 'test plans', 'functional testing', 'integration testing') are allowed ONLY if they are unusually emphasized in the JD; otherwise they should lose to specific tools/protocols.
 - You are unconstrained in judgment: pick what matters most for this role.
@@ -208,5 +213,22 @@ Fix this into valid JSON (same structure/content; syntax repair only):
 
     if not isinstance(data, dict):
         raise RuntimeError("Invalid response: top-level must be an object")
+    # Normalize model type drift deterministically.
+    # The contract allows only: "keyword" or "tool".
+    def _normalize_keyword_scout_types(obj: dict) -> None:
+        items = obj.get("keywords_tools_ranked")
+        if not isinstance(items, list):
+            return
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            t = (it.get("type") or "").strip().lower()
+            if t == "tool":
+                it["type"] = "tool"
+            else:
+                # anything else becomes keyword (protocol, language, etc.)
+                it["type"] = "keyword"
+
+    _normalize_keyword_scout_types(data)
 
     return data

@@ -1,0 +1,373 @@
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
+import argparse, json, re, os
+from pathlib import Path
+from datetime import datetime, timezone
+
+def die(msg: str, code=1):
+    print(f"ERROR: {msg}")
+    raise SystemExit(code)
+
+def load_json(p: Path):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        die(f"invalid JSON: {p} ({e})")
+
+def norm(s: str) -> str:
+    s = (s or "").lower()
+    s = s.replace("\u2019", "'")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+def _dedupe_csv_values(csv: str):
+    parts = [x.strip() for x in (csv or "").split(",")]
+    seen = set()
+    out = []
+    for x in parts:
+        if not x:
+            continue
+        k = norm(x)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(x)
+    return out
+
+def _append_term_to_skill_line(line: str, term: str) -> str:
+    line = (line or "").rstrip()
+    term = (term or "").strip()
+    if not line or not term:
+        return line
+    if ":" not in line:
+        return line
+    label, rest = line.split(":", 1)
+    vals = _dedupe_csv_values(rest)
+    # already present?
+    if any(norm(v) == norm(term) for v in vals):
+        return line
+    vals.append(term)
+    return f"{label.strip()}: " + ", ".join(vals)
+
+def _choose_skill_ref_for_term(k_refs, line_index, term: str) -> str:
+    t = norm(term)
+
+    def label_of(ref):
+        line = (line_index.get(ref, {}) or {}).get("text", "")
+        if ":" not in (line or ""):
+            return ""
+        return norm(line.split(":", 1)[0])
+
+    # Prefer category-ish labels based on term
+    def score_ref(ref):
+        lab = label_of(ref)
+        sc = 0
+        if not lab:
+            return -999
+
+        # tools / frameworks
+        if any(x in t for x in ["selenium","webdriver","playwright","cypress","junit","testng","jbehave","karate"]):
+            if "test" in lab or "automation" in lab or "framework" in lab:
+                sc += 50
+
+        # ci/cd
+        if any(x in t for x in ["jenkins","github actions","gitlab","ci/cd","pipeline","teamcity"]):
+            if "ci" in lab or "build" in lab or "devops" in lab:
+                sc += 60
+
+        # performance/load
+        if any(x in t for x in ["jmeter","loadrunner","load runner","load ui","gatling","k6"]):
+            if "perform" in lab or "load" in lab:
+                sc += 60
+            if "test" in lab:
+                sc += 20
+
+        # security
+        if any(x in t for x in ["app scan","twistlock","polaris","zap","burp","security"]):
+            if "security" in lab:
+                sc += 70
+            if "test" in lab:
+                sc += 10
+
+        # protocols/api
+        if any(x in t for x in ["http","https","rpc","sftp","socket","rest","soap"]):
+            if "api" in lab or "integration" in lab or "protocol" in lab:
+                sc += 60
+            if "test" in lab:
+                sc += 10
+
+        # language
+        if any(x in t for x in ["java","groovy","python","typescript","javascript"]):
+            if "language" in lab or "program" in lab or "scripting" in lab:
+                sc += 60
+
+        # fallback: a "tools" or "tech" bucket
+        if "tool" in lab or "tech" in lab:
+            sc += 15
+
+        # slight prefer earlier lines (stable)
+        try:
+            sc -= int(ref[1:]) * 0.01
+        except Exception:
+            pass
+        return sc
+
+    scored = sorted(((score_ref(r), r) for r in k_refs), reverse=True)
+    best_sc, best_ref = scored[0]
+    if best_sc <= 0:
+        return k_refs[0]
+    return best_ref
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--app", required=True)
+    ap.add_argument("--diff", action="store_true", help="Show BEFORE/AFTER diffs")
+    ap.add_argument("--no-write", action="store_true")
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser()
+    if not app.is_dir():
+        die(f"app dir missing: {app}")
+
+    sel_p = app / "tracking" / "selected-template.json"
+    if not sel_p.exists():
+        die(f"missing: {sel_p} (run: resume-select --app \"{app}\" --family <family>)")
+    sel = load_json(sel_p)
+    docx_path = Path(sel.get("resume_master_docx", "")).expanduser()
+    if not docx_path.exists():
+        die(f"missing resume_master_docx: {docx_path}")
+
+    ip_p = app / "notes" / "ideal-profile.json"
+    if not ip_p.exists():
+        die(f"missing: {ip_p} (run: resume-ideal-profile --app \"{app}\")")
+    ip_doc = load_json(ip_p)
+    ideal_profile = ip_doc.get("ideal_profile") or {}
+    if not isinstance(ideal_profile, dict):
+        die("ideal-profile.json invalid: top-level ideal_profile must be an object")
+
+    ks_p = app / "notes" / "keyword-scout.json"
+    keyword_scout = None
+    if ks_p.exists():
+        try:
+            keyword_scout = load_json(ks_p).get("keyword_scout")
+        except Exception:
+            keyword_scout = None
+
+    scripts_dir = Path.home() / "secondbrain/01_projects/resume-factory/scripts"
+    if not scripts_dir.is_dir():
+        die(f"missing scripts dir: {scripts_dir}")
+    import sys
+    sys.path.insert(0, str(scripts_dir))
+
+    from rf_docx_extract import read_docx_lines, locate_sections, format_numbered_blocks_for_prompt
+    from rf_proposal_schema import validate_proposals
+    from rf_print_diff import print_diff
+
+    lines = read_docx_lines(docx_path)
+    header, summary, skills, exp = locate_sections(lines)
+    _blocks, line_index = format_numbered_blocks_for_prompt(header, summary, skills, exp, max_exp_lines=90)
+
+    # collect SKILLS refs (K### in SKILLS section)
+    k_refs = []
+    for ref, meta in (line_index or {}).items():
+        if not isinstance(ref, str) or not ref.startswith("K"):
+            continue
+        if (meta or {}).get("section") != "SKILLS":
+            continue
+        txt = (meta or {}).get("text", "") or ""
+        t = txt.strip()
+        if not t:
+            continue
+        # skip heading-ish lines
+        if t.endswith(":") and not t.lstrip().startswith("•"):
+            continue
+        k_refs.append(ref)
+
+    k_refs.sort(key=lambda r: int(r[1:]) if r[1:].isdigit() else 10**9)
+    if not k_refs:
+        die("no SKILLS lines found in template to anchor edits")
+    # -------- Option B (power): call rewrite engine using ideal-profile as structured signals --------
+
+    jd_p = app / "jd" / "jd-raw.txt"
+    if not jd_p.exists() or jd_p.stat().st_size == 0:
+        die(f"missing/empty: {jd_p}")
+    jd_raw = jd_p.read_text(errors="ignore")
+
+    # Load template signals.json (same folder as resume-master.docx)
+    template_dir = docx_path.parent
+    sig_p = template_dir / "signals.json"
+    if not sig_p.exists():
+        die(f"missing template signals.json: {sig_p}")
+    template_signals = load_json(sig_p)
+
+    # Pull the *real* ideal_profile object (your resume-ideal-profile output now flattens,
+    # but keep this robust if older nested versions appear).
+    if isinstance(ideal_profile, dict) and "ideal_profile" in ideal_profile and isinstance(ideal_profile.get("ideal_profile"), dict):
+        ideal_profile_obj = ideal_profile.get("ideal_profile")
+    else:
+        ideal_profile_obj = ideal_profile
+
+    # Merge structured signals for the rewrite engine (not a constraint; a hint packet)
+    signals = {
+        "template_signals": template_signals,
+        "ideal_profile": ideal_profile_obj,
+        "keyword_scout": keyword_scout or {},
+    }
+
+    from rf_rewrite_client import generate_rewrite_packet_openai
+
+    # IMPORTANT: format_numbered_blocks_for_prompt returns (blocks, line_index).
+    # You currently stored blocks in `_blocks`.
+    resume_blocks_numbered = _blocks
+
+    template_folder_name = template_dir.name
+
+    payload = generate_rewrite_packet_openai(
+        jd_raw=jd_raw,
+        resume_blocks_numbered=resume_blocks_numbered,
+        signals=signals,
+        selected_template=template_folder_name,
+        model=os.environ.get("RF_OPENAI_MODEL", None),
+        max_proposals=int(os.environ.get("RF_MAX_PROPOSALS", "16")),
+        timeout_s=int(os.environ.get("RF_OPENAI_TIMEOUT_S", "90")),
+    )
+
+    if payload.get("selected_template") != template_folder_name:
+        die(f"LLM selected_template mismatch. expected={template_folder_name} got={payload.get('selected_template')!r}")
+
+    rewrite_packet = payload.get("rewrite_packet") or {}
+
+    # ---------- compile anchored proposals (deterministic) ----------
+    proposals = []
+
+    def _as_lines(v):
+        if isinstance(v, list):
+            return [str(x).rstrip() for x in v if isinstance(x, str) and x.strip()]
+        if isinstance(v, str):
+            return [ln.rstrip() for ln in v.splitlines() if ln.strip()]
+        return []
+
+    def _sorted_refs(prefix: str):
+        refs = [r for r, meta in line_index.items() if isinstance(r, str) and r.startswith(prefix)]
+        def key(r):
+            try:
+                return int(r[1:])
+            except Exception:
+                return 10**9
+        return sorted(refs, key=key)
+
+    def _is_heading_line(ref: str) -> bool:
+        line = (line_index.get(ref, {}) or {}).get("text", "")
+        t = (line or "").strip()
+        if not t:
+            return True
+        if t.endswith(":") and not t.lstrip().startswith("•"):
+            return True
+        tu = t.upper().rstrip(":").strip()
+        if tu in {"PROFESSIONAL SUMMARY", "SUMMARY", "TECHNICAL SKILL", "TECHNICAL SKILLS", "SKILLS", "PROFESSIONAL EXPERIENCE", "EXPERIENCE"}:
+            return True
+        return False
+
+    def _preserve_bullet(before_line: str, after_line: str) -> str:
+        b = (before_line or "").lstrip()
+        a = (after_line or "").lstrip()
+        before_has = b.startswith("•")
+        after_has = a.startswith("•")
+        if before_has and not after_has:
+            return "• " + a
+        if (not before_has) and after_has:
+            return a.lstrip("•").lstrip()
+        return after_line
+
+    # SUMMARY
+    ps_lines = _as_lines(rewrite_packet.get("professional_summary"))
+    s_refs = [r for r in _sorted_refs("S") if (line_index.get(r, {}) or {}).get("section") == "SUMMARY" and not _is_heading_line(r)]
+    for i in range(min(len(ps_lines), len(s_refs))):
+        ref = s_refs[i]
+        before = (line_index.get(ref, {}) or {}).get("text", "") or ""
+        after0 = _preserve_bullet(before, ps_lines[i])
+        if before and after0 and before != after0:
+            proposals.append({
+                "section": "SUMMARY",
+                "op": "REPLACE_LINE",
+                "before_ref": ref,
+                "before": [before],
+                "after": [after0],
+                "rationale": f"Ideal-profile driven summary update for {ref}.",
+            })
+
+    # SKILLS (category-aware: replace existing skills lines in order; do not invent headings)
+    sk_lines = _as_lines(rewrite_packet.get("technical_skills"))
+    k_refs = [r for r in _sorted_refs("K") if (line_index.get(r, {}) or {}).get("section") == "SKILLS" and not _is_heading_line(r)]
+    for i in range(min(len(sk_lines), len(k_refs))):
+        ref = k_refs[i]
+        before = (line_index.get(ref, {}) or {}).get("text", "") or ""
+        after0 = sk_lines[i].strip()
+        # preserve ":" structure if template had it
+        if ":" in before and ":" not in after0:
+            # keep label from before, replace right side
+            lab = before.split(":", 1)[0].strip()
+            after0 = f"{lab}: {after0}"
+        if before and after0 and before != after0:
+            proposals.append({
+                "section": "SKILLS",
+                "op": "REPLACE_LINE",
+                "before_ref": ref,
+                "before": [before],
+                "after": [after0],
+                "rationale": f"Ideal-profile driven skills update for {ref}.",
+            })
+
+    # EXPERIENCE (rewrite_packet.experience = [{target:"E###", action:"REPLACE_LINE", new_line:"..."}])
+    exp_items = rewrite_packet.get("experience", [])
+    if isinstance(exp_items, list):
+        for it in exp_items:
+            if not isinstance(it, dict):
+                continue
+            target = (it.get("target") or "").strip()
+            action = (it.get("action") or "").strip()
+            new_line = (it.get("new_line") or "").strip()
+            if action != "REPLACE_LINE":
+                continue
+            if not target.startswith("E") or target not in line_index:
+                continue
+            if _is_heading_line(target):
+                continue
+            before = (line_index.get(target, {}) or {}).get("text", "") or ""
+            after0 = _preserve_bullet(before, new_line)
+            if before and after0 and before != after0:
+                proposals.append({
+                    "section": "EXPERIENCE",
+                    "op": "REPLACE_LINE",
+                    "before_ref": target,
+                    "before": [before],
+                    "after": [after0],
+                    "rationale": f"Ideal-profile driven experience update for {target}.",
+                })
+
+    ok, msg = validate_proposals(proposals)
+    if not ok:
+        die(f"edit-proposals schema invalid: {msg}")
+
+    out = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "app": str(app),
+        "source": "resume-map-ideal-edits",
+        "selected_template": sel.get("template_folder_name") or sel.get("template_slug") or "",
+        "proposals": proposals,
+    }
+
+    out_p = app / "resume_refs" / "edit-proposals.json"
+    if args.no_write:
+        print(json.dumps(out, indent=2))
+        return
+
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    out_p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+
+    if args.diff:
+        print_diff(proposals)
+
+    print(f"WROTE: {out_p}")
+
+if __name__ == "__main__":
+    main()
