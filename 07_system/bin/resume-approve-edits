@@ -1,5 +1,5 @@
 #!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
-import argparse, json, os, re, subprocess, sys
+import argparse, json, os, re, subprocess, sys, shutil, difflib
 from pathlib import Path
 
 # --- Helpers ---------------------------------------------------------------
@@ -206,6 +206,24 @@ def apply_replace_phrase(doc, before_phrase: str, after_phrase: str) -> bool:
 
     return False
 
+
+def _utc_stamp() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+
+def _docx_text(docx_path: Path) -> str:
+    """
+    Extract readable text from a DOCX for stable diffs.
+    (Paragraph text only; good enough for resume deltas.)
+    """
+    from docx import Document  # type: ignore
+    d = Document(str(docx_path))
+    lines = []
+    for para in getattr(d, "paragraphs", []):
+        t = (para.text or "").rstrip()
+        lines.append(t)
+    return "\n".join(lines).strip() + "\n"
+
 # --- Main ------------------------------------------------------------------
 
 def _iter_paragraphs(doc):
@@ -398,6 +416,22 @@ def main():
 
     out_dir = app / "resume_refs"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+
+    out_path = out_dir / "resume.docx"
+    # --- C) Resume diff vs previous resume (when overwriting) ----------------
+        # out_path already set earlier (C: diff vs previous)
+    stamp = _utc_stamp()
+
+    prev_path = None
+    if out_path.exists() and args.force:
+        # Archive the previous resume.docx
+        hist_dir = out_dir / "resume_history"
+        hist_dir.mkdir(parents=True, exist_ok=True)
+        prev_path = hist_dir / f"{stamp}_resume.docx"
+        shutil.copy2(out_path, prev_path)
+
+    # We'll write the NEW resume to out_path later (existing behavior).
     out_docx = out_dir / "resume.docx"
     log_path = out_dir / "edits-applied.json"
 
@@ -410,6 +444,17 @@ def main():
 
     # Write resume + log
     doc.save(str(out_docx))
+
+    # If we archived a previous resume, generate a text diff for review
+    if prev_path is not None and prev_path.exists() and out_path.exists():
+        diffs_dir = out_dir / "diffs_history"
+        diffs_dir.mkdir(parents=True, exist_ok=True)
+        a = _docx_text(prev_path).splitlines(keepends=True)
+        b = _docx_text(out_path).splitlines(keepends=True)
+        diff = difflib.unified_diff(a, b, fromfile=str(prev_path.name), tofile=str(out_path.name))
+        diff_path = diffs_dir / f"{stamp}_resume.diff"
+        diff_path.write_text("".join(diff), encoding="utf-8")
+        print(f"WROTE: {diff_path}")
     log = {
         "app": str(app),
         "template_id": tid,

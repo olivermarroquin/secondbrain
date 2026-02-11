@@ -13,6 +13,25 @@ def load_json(p: Path):
     except Exception as e:
         die(f"invalid JSON: {p} ({e})")
 
+def _safe_mkdir(d: Path):
+    d.mkdir(parents=True, exist_ok=True)
+
+def _ts():
+    # UTC timestamp safe for filenames
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+
+def _archive_file(src: Path, dst_dir: Path, prefix: str):
+    try:
+        if not src.exists() or src.stat().st_size == 0:
+            return
+        _safe_mkdir(dst_dir)
+        dst = dst_dir / f"{_ts()}_{prefix}{src.suffix}"
+        dst.write_text(src.read_text(encoding="utf-8", errors="ignore"), encoding="utf-8")
+    except Exception:
+        # never break the run due to archiving
+        pass
+
 def norm(s: str) -> str:
     s = (s or "").lower()
     s = s.replace("\u2019", "'")
@@ -469,6 +488,7 @@ def main():
     raw_json_p = notes_dir / "rewrite-packet.json"
     md_p = notes_dir / "rewrite-packet.md"
     raw_json_p.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    _archive_file(raw_json_p, app / 'notes' / 'rewrite_packets_history', 'rewrite-packet')
     md_p.write_text(render_rewrite_packet_md(payload) + "\n")
 
     out_dir = app / "resume_refs"
@@ -493,6 +513,7 @@ def main():
         print("NOTE: --no-write set; not writing edit-proposals.json")
     else:
         out_p.write_text(json.dumps(out_payload, indent=2, ensure_ascii=False) + "\n")
+        _archive_file(out_p, app / 'resume_refs' / 'proposals_history', 'edit-proposals')
 
     if args.diff:
         print_diff(cleaned)
