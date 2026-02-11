@@ -39,9 +39,14 @@ def main():
         _rm(app / "notes" / "keyword-scout.json")
         _rm(app / "notes" / "ideal-profile.json")
 
-    # Generate keyword scout + ideal profile (idempotent)
-    subprocess.run(["resume-keyword-scout", "--app", str(app)], check=True)
-    subprocess.run(["resume-ideal-profile", "--app", str(app)], check=True)
+    # Generate keyword scout + ideal profile (cache unless missing/empty; --refresh deletes them above)
+    ks = app / "notes" / "keyword-scout.json"
+    ip = app / "notes" / "ideal-profile.json"
+
+    if (not ks.exists()) or ks.stat().st_size == 0:
+        subprocess.run(["resume-keyword-scout", "--app", str(app)], check=True)
+    if (not ip.exists()) or ip.stat().st_size == 0:
+        subprocess.run(["resume-ideal-profile", "--app", str(app)], check=True)
 
     # Generate proposals (this is the artifact you approve)
     cmd = ["resume-map-ideal-edits", "--app", str(app)]

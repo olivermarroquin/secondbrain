@@ -142,6 +142,12 @@ HARD RULES:
 
 LIMITS:
 - Prefer high-signal edits; do not rewrite everything.
+- Spine-preserving enhancement model:
+  * Preserve the candidate's core automation identity from template_signals.
+  * Enhance and rebalance toward the job stack.
+  * Do NOT aggressively replace the entire skills spine unless fundamentally incompatible.
+  * Blend base stack with job stack.
+  * Slight full-stack overwrite is allowed, but identity erasure is not.
 """
 
     user_prompt = f"""PRIMARY STACK TARGET (deterministic; obey for coherence):

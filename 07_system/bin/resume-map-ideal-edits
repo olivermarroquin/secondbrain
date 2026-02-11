@@ -281,32 +281,110 @@ def main():
     # SUMMARY
     ps_lines = _as_lines(rewrite_packet.get("professional_summary"))
     s_refs = [r for r in _sorted_refs("S") if (line_index.get(r, {}) or {}).get("section") == "SUMMARY" and not _is_heading_line(r)]
-    for i in range(min(len(ps_lines), len(s_refs))):
-        ref = s_refs[i]
-        before = (line_index.get(ref, {}) or {}).get("text", "") or ""
-        after0 = _preserve_bullet(before, ps_lines[i])
-        if before and after0 and before != after0:
-            proposals.append({
-                "section": "SUMMARY",
-                "op": "REPLACE_LINE",
-                "before_ref": ref,
-                "before": [before],
-                "after": [after0],
-                "rationale": f"Ideal-profile driven summary update for {ref}.",
-            })
 
-    # SKILLS (category-aware: replace existing skills lines in order; do not invent headings)
+    if s_refs:
+        # Case A: template summary is a single paragraph line -> collapse model output into one paragraph
+        if len(s_refs) == 1:
+            joined = " ".join([ln.strip() for ln in ps_lines if isinstance(ln, str) and ln.strip()]).strip()
+            if joined:
+                ref = s_refs[0]
+                before = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                after0 = _preserve_bullet(before, joined)
+                if before and after0 and before != after0:
+                    proposals.append({
+                        "section": "SUMMARY",
+                        "op": "REPLACE_LINE",
+                        "before_ref": ref,
+                        "before": [before],
+                        "after": [after0],
+                        "rationale": f"Ideal-profile driven summary update for {ref}.",
+                    })
+
+        # Case B: template summary has multiple paragraph lines
+        else:
+            # If model gave a single paragraph, replace first line + delete the rest
+            if len(ps_lines) == 1:
+                ref0 = s_refs[0]
+                before0 = (line_index.get(ref0, {}) or {}).get("text", "") or ""
+                after0 = _preserve_bullet(before0, ps_lines[0])
+                if before0 and after0 and before0 != after0:
+                    proposals.append({
+                        "section": "SUMMARY",
+                        "op": "REPLACE_LINE",
+                        "before_ref": ref0,
+                        "before": [before0],
+                        "after": [after0],
+                        "rationale": f"Ideal-profile driven summary update for {ref0}.",
+                    })
+
+                for ref in s_refs[1:]:
+                    b = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                    if b:
+                        proposals.append({
+                            "section": "SUMMARY",
+                            "op": "DELETE_LINE",
+                            "before_ref": ref,
+                            "before": [b],
+                            "after": [""],
+                            "rationale": f"Ideal-profile driven summary normalization (delete extra line {ref}).",
+                        })
+
+            # If model gave multiple lines, replace what we have and delete extras in the template
+            else:
+                for i in range(min(len(ps_lines), len(s_refs))):
+                    ref = s_refs[i]
+                    before = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                    after0 = _preserve_bullet(before, ps_lines[i])
+                    if before and after0 and before != after0:
+                        proposals.append({
+                            "section": "SUMMARY",
+                            "op": "REPLACE_LINE",
+                            "before_ref": ref,
+                            "before": [before],
+                            "after": [after0],
+                            "rationale": f"Ideal-profile driven summary update for {ref}.",
+                        })
+
+                # delete any remaining template summary lines not covered by model output
+                for ref in s_refs[len(ps_lines):]:
+                    b = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                    if b:
+                        proposals.append({
+                            "section": "SUMMARY",
+                            "op": "DELETE_LINE",
+                            "before_ref": ref,
+                            "before": [b],
+                            "after": [""],
+                            "rationale": f"Ideal-profile driven summary cleanup (delete unused line {ref}).",
+                        })
+
+    # SKILLS (spine-preserving but creative overwrite)
     sk_lines = _as_lines(rewrite_packet.get("technical_skills"))
-    k_refs = [r for r in _sorted_refs("K") if (line_index.get(r, {}) or {}).get("section") == "SKILLS" and not _is_heading_line(r)]
+    k_refs = [r for r in _sorted_refs("K")
+            if (line_index.get(r, {}) or {}).get("section") == "SKILLS"
+            and not _is_heading_line(r)]
+
     for i in range(min(len(sk_lines), len(k_refs))):
         ref = k_refs[i]
         before = (line_index.get(ref, {}) or {}).get("text", "") or ""
         after0 = sk_lines[i].strip()
-        # preserve ":" structure if template had it
-        if ":" in before and ":" not in after0:
-            # keep label from before, replace right side
+        if not after0:
+            continue
+
+        # If both have labels, preserve template label casing when labels are semantically similar
+        if ":" in before and ":" in after0:
+            before_label = before.split(":", 1)[0].strip()
+            after_label = after0.split(":", 1)[0].strip()
+
+            # If labels are similar → preserve original label
+            if norm(before_label) == norm(after_label):
+                after0 = f"{before_label}: {after0.split(':',1)[1].strip()}"
+
+        # If template had a label but model omitted it → keep template label
+        elif ":" in before and ":" not in after0:
             lab = before.split(":", 1)[0].strip()
             after0 = f"{lab}: {after0}"
+
         if before and after0 and before != after0:
             proposals.append({
                 "section": "SKILLS",
@@ -316,6 +394,9 @@ def main():
                 "after": [after0],
                 "rationale": f"Ideal-profile driven skills update for {ref}.",
             })
+
+
+
 
     # EXPERIENCE (rewrite_packet.experience = [{target:"E###", action:"REPLACE_LINE", new_line:"..."}])
     exp_items = rewrite_packet.get("experience", [])

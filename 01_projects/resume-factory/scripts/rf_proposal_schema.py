@@ -70,14 +70,8 @@ def validate_proposals(payload: Any) -> Tuple[bool, str]:
         # DELETE_LINE special-case:
         # Allow after to be empty string ([""]) or empty list ([]) since deletion has no replacement text.
         if op == "DELETE_LINE":
-            if not isinstance(after, list):
-                return _die(f"proposal #{i}: DELETE_LINE requires after to be a list (may be [''] or [])")
-            if after == []:
-                pass
-            elif len(after) == 1 and isinstance(after[0], str) and after[0] == "":
-                pass
-            else:
-                return _die(f"proposal #{i}: DELETE_LINE requires after to be [''] or []")
+            if not (isinstance(after, list) and len(after) == 1 and isinstance(after[0], str) and after[0] == ""):
+                return _die(f"proposal #{i}: DELETE_LINE requires after to be ['']")
         if not isinstance(before, list) or not before or not all(isinstance(x, str) and x.strip() for x in before):
             return _die(f"proposal #{i}: before must be a non-empty list of non-empty strings")
         # after validation (DELETE_LINE is allowed to have empty after)
