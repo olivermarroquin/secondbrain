@@ -212,22 +212,285 @@ def _iter_paragraphs(doc):
     return list(getattr(doc, 'paragraphs', []))
 
 def apply_add_line(doc, anchor_line: str, new_line: str) -> bool:
-    # Insert new_line AFTER the paragraph whose text exactly equals anchor_line.
+    # Insert new_line AFTER the paragraph whose text equals anchor_line,
+    # by CLONING the anchor paragraph XML to preserve *all* formatting
+    # (indent/tab stops/table cell context/run styles).
     anchor_line = (anchor_line or '').strip()
     new_line = (new_line or '').strip()
     if not anchor_line or not new_line:
         return False
 
+    import copy
+    from docx.text.paragraph import Paragraph
+
+    for para in _iter_paragraphs(doc):
+        if (para.text or '').strip() == anchor_line:
+            # 1) Clone the anchor paragraph XML and insert it after the anchor
+            new_p = copy.deepcopy(para._p)
+            para._p.addnext(new_p)
+            new_para = Paragraph(new_p, para._parent)
+
+            # 2) Clear all run text but keep formatting
+            for r in list(new_para.runs):
+                r.text = ""
+
+            # 3) Refill using the template’s common 2-run pattern: bold label + normal values
+            if ":" in new_line:
+                label, rest = new_line.split(":", 1)
+                label = label.strip() + ":"
+                rest = " " + rest.strip()
+
+                if len(new_para.runs) >= 2:
+                    r0, r1 = new_para.runs[0], new_para.runs[1]
+                    r0.text = label
+                    r0.bold = True  # force label bold (matches SKILLS rows)
+                    r1.text = rest
+                    if r1.bold is True:
+                        r1.bold = False
+                else:
+                    # fallback if clone produced no runs
+                    r0 = new_para.add_run(label)
+                    r0.bold = True
+                    r1 = new_para.add_run(rest)
+                    r1.bold = False
+            else:
+                # single-line fallback
+                if new_para.runs:
+                    new_para.runs[0].text = new_line
+                else:
+                    new_para.add_run(new_line)
+
+            return True
+
+    return False
     from docx.oxml import OxmlElement
     from docx.text.paragraph import Paragraph
+    import re as _re
+
+    def _copy_paragraph_format(dst, srcp):
+        try:
+            dst.style = srcp.style
+        except Exception:
+            pass
+        try:
+            dst.alignment = srcp.alignment
+        except Exception:
+            pass
+        try:
+            spf = srcp.paragraph_format
+            dpf = dst.paragraph_format
+            dpf.left_indent = spf.left_indent
+            dpf.right_indent = spf.right_indent
+            dpf.first_line_indent = spf.first_line_indent
+            dpf.space_before = spf.space_before
+            dpf.space_after = spf.space_after
+            dpf.line_spacing = spf.line_spacing
+            dpf.keep_together = spf.keep_together
+            dpf.keep_with_next = spf.keep_with_next
+            dpf.page_break_before = spf.page_break_before
+            dpf.widow_control = spf.widow_control
+        except Exception:
+            pass
+
+    def _copy_run_style(dst_run, src_run):
+        try:
+            dst_run.bold = src_run.bold
+            dst_run.italic = src_run.italic
+            dst_run.underline = src_run.underline
+            if src_run.font is not None:
+                dst_run.font.name = src_run.font.name
+                dst_run.font.size = src_run.font.size
+        except Exception:
+            pass
+
+    for para in _iter_paragraphs(doc):
+        if (para.text or '').strip() == anchor_line:
+            # Capture the template's leading whitespace (usually tabs) that creates the visual indent
+            raw_text = (para.text or "")
+            lead = (_re.match(r"^(\s*)", raw_text).group(1) if raw_text else "")
+
+            new_p = OxmlElement('w:p')
+            para._p.addnext(new_p)
+            new_para = Paragraph(new_p, para._parent)
+
+            # Copy paragraph-level formatting (may help in some templates)
+            _copy_paragraph_format(new_para, para)
+
+            # If it's a "Label: values" skills line and anchor uses 2+ runs, keep the 2-run pattern
+            if ":" in new_line and len(para.runs) >= 2:
+                label, rest = new_line.split(":", 1)
+                label = lead + label.strip() + ":"
+                rest = " " + rest.strip()
+
+                r0_tpl = para.runs[0]
+                r1_tpl = para.runs[1]
+
+                r0 = new_para.add_run(label)
+                _copy_run_style(r0, r0_tpl)
+                r0.bold = True  # force label bold for SKILLS rows
+
+                r1 = new_para.add_run(rest)
+                _copy_run_style(r1, r1_tpl)
+                if r1.bold is True:
+                    r1.bold = False
+                return True
+
+            # Fallback: single-run insertion, still include leading whitespace indent
+            r = new_para.add_run(lead + new_line)
+            if para.runs:
+                _copy_run_style(r, para.runs[0])
+            return True
+
+    return False
+    from docx.oxml import OxmlElement
+    from docx.text.paragraph import Paragraph
+
+    def _copy_paragraph_format(dst, srcp):
+        try:
+            dst.style = srcp.style
+        except Exception:
+            pass
+        try:
+            dst.alignment = srcp.alignment
+        except Exception:
+            pass
+        try:
+            spf = srcp.paragraph_format
+            dpf = dst.paragraph_format
+            # copy the most important layout knobs
+            dpf.left_indent = spf.left_indent
+            dpf.right_indent = spf.right_indent
+            dpf.first_line_indent = spf.first_line_indent
+            dpf.space_before = spf.space_before
+            dpf.space_after = spf.space_after
+            dpf.line_spacing = spf.line_spacing
+            dpf.keep_together = spf.keep_together
+            dpf.keep_with_next = spf.keep_with_next
+            dpf.page_break_before = spf.page_break_before
+            dpf.widow_control = spf.widow_control
+        except Exception:
+            pass
+
+    def _copy_run_style(dst_run, src_run):
+        try:
+            dst_run.bold = src_run.bold
+            dst_run.italic = src_run.italic
+            dst_run.underline = src_run.underline
+            if src_run.font is not None:
+                dst_run.font.name = src_run.font.name
+                dst_run.font.size = src_run.font.size
+        except Exception:
+            pass
 
     for para in _iter_paragraphs(doc):
         if (para.text or '').strip() == anchor_line:
             new_p = OxmlElement('w:p')
             para._p.addnext(new_p)
             new_para = Paragraph(new_p, para._parent)
-            new_para.add_run(new_line)
+
+            # 1) copy paragraph-level formatting (this is what fixes your indentation issue)
+            _copy_paragraph_format(new_para, para)
+
+            # 2) If the anchor looks like a SKILLS row with 2 runs (bold label + normal values),
+            #    preserve that structure for new "Label: values" lines.
+            if ":" in new_line and len(para.runs) >= 2:
+                label, rest = new_line.split(":", 1)
+                label = label.strip() + ":"
+                rest = " " + rest.strip()
+
+                # Use the anchor's first two runs as style templates when possible
+                r0_tpl = para.runs[0]
+                r1_tpl = para.runs[1]
+
+                r0 = new_para.add_run(label)
+                _copy_run_style(r0, r0_tpl)
+                r0.bold = True  # force label bold for SKILLS rows
+
+                r1 = new_para.add_run(rest)
+                _copy_run_style(r1, r1_tpl)
+                if r1.bold is True:
+                    r1.bold = False
+                return True
+
+            # 3) fallback: single-run insertion, still with paragraph formatting copied
+            r = new_para.add_run(new_line)
+            if para.runs:
+                _copy_run_style(r, para.runs[0])
             return True
+
+    return False
+    from docx.oxml import OxmlElement
+    from docx.text.paragraph import Paragraph
+
+    def _copy_paragraph_format(dst, srcp):
+        try:
+            dst.style = srcp.style
+        except Exception:
+            pass
+        try:
+            dpf, spf = dst.paragraph_format, srcp.paragraph_format
+            dpf.left_indent = spf.left_indent
+            dpf.right_indent = spf.right_indent
+            dpf.first_line_indent = spf.first_line_indent
+            dpf.space_before = spf.space_before
+            dpf.space_after = spf.space_after
+            dpf.line_spacing = spf.line_spacing
+            dpf.keep_together = spf.keep_together
+            dpf.keep_with_next = spf.keep_with_next
+            dpf.page_break_before = spf.page_break_before
+            dpf.widow_control = spf.widow_control
+        except Exception:
+            pass
+
+    def _copy_run_font(dst_run, src_run):
+        try:
+            dst_run.bold = src_run.bold
+            dst_run.italic = src_run.italic
+            dst_run.underline = src_run.underline
+            if src_run.font is not None:
+                dst_run.font.name = src_run.font.name
+                dst_run.font.size = src_run.font.size
+        except Exception:
+            pass
+
+    for para in _iter_paragraphs(doc):
+        if (para.text or '').strip() == anchor_line:
+            # Create new paragraph directly after anchor
+            new_p = OxmlElement('w:p')
+            para._p.addnext(new_p)
+            new_para = Paragraph(new_p, para._parent)
+
+            # Preserve paragraph style/indentation so it stays inside the skills block visually
+            _copy_paragraph_format(new_para, para)
+
+            # Preserve typical SKILLS two-run pattern: bold "Label:" + normal " values"
+            if ":" in new_line:
+                label, rest = new_line.split(":", 1)
+                label = label.strip()
+                rest = rest.strip()
+
+                # Try to copy formatting from anchor runs if present
+                r0_src = para.runs[0] if len(para.runs) >= 1 else None
+                r1_src = para.runs[1] if len(para.runs) >= 2 else None
+
+                r0 = new_para.add_run(label + ":")
+                r0.bold = True
+                if r0_src is not None:
+                    _copy_run_font(r0, r0_src)
+
+                r1 = new_para.add_run(" " + rest if rest else "")
+                r1.bold = False
+                if r1_src is not None:
+                    _copy_run_font(r1, r1_src)
+
+                return True
+
+            # Non "Label: values" line: fall back to single run, copy anchor run styling
+            r = new_para.add_run(new_line)
+            if para.runs:
+                _copy_run_font(r, para.runs[0])
+            return True
+
     return False
 
 def apply_delete_line(doc, target_line: str) -> bool:
