@@ -26,3 +26,15 @@ Next:
 
 - Add `resume-suggest-edits --from-latest` to iterate on `resume_refs/resume.docx`.
   MD
+
+
+---
+
+## 2026-02-12 (run10) — Layers A/B/C locked + Layer C formatting stabilized
+- Layer A: `resume-map-ideal-edits` writes RAW rewrite packet → `resume_refs/rewrite-packet.raw.json`
+- Layer B: `resume-filter-edits` compiles RAW → deterministic `resume_refs/edit-proposals.json`
+- Layer C: `resume-approve-edits` stabilized summary spacing + skills typography; no extra blank paragraphs
+- Checkpoint: checkpoints/2026-02-12_checkpoint.md
+- Synthesis: analysis/2026-02-12_run10_post-run_synthesis.md
+- Log: logs/2026-02-12_run10_full-run-log.md
+- Archive: archives/2026-02-12_run10_archive-notes.md

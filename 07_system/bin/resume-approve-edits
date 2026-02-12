@@ -129,6 +129,11 @@ def apply_replace_line(doc, before_line: str, after_line: str) -> bool:
                 r0.bold = True
                 r1 = para.add_run(" " + rest.strip())
                 r1.bold = False
+                # Preserve template font for both runs to avoid style drift
+                if tpl is not None and tpl.font is not None:
+                    for rr in (r0, r1):
+                        rr.font.name = tpl.font.name
+                        rr.font.size = tpl.font.size
                 return True
 
             # Otherwise fall back to single-run replace, preserving the template run style.
@@ -345,7 +350,6 @@ def apply_add_line(doc, anchor_line: str, new_line: str) -> bool:
                 label, rest = new_line.split(":", 1)
                 label = label.strip() + ":"
                 rest = " " + rest.strip()
-
                 if len(new_para.runs) >= 2:
                     r0, r1 = new_para.runs[0], new_para.runs[1]
                     r0.text = label
@@ -353,6 +357,10 @@ def apply_add_line(doc, anchor_line: str, new_line: str) -> bool:
                     r1.text = rest
                     if r1.bold is True:
                         r1.bold = False
+                    # Preserve template font for both runs to avoid style drift
+                    if r0.font is not None:
+                        r1.font.name = r0.font.name
+                        r1.font.size = r0.font.size
                 else:
                     # fallback if clone produced no runs
                     r0 = new_para.add_run(label)
@@ -531,9 +539,6 @@ def main():
         die(f"Refusing to overwrite existing file: {out_docx} (use --force)")
 
     # Write resume + log
-        _cleanup_blank_paragraphs(doc)
-
-    # Write resume + log
     _cleanup_blank_paragraphs(doc)
     _fix_summary_to_skills_spacing(doc)
     doc.save(str(out_docx))
@@ -644,7 +649,7 @@ def _fix_summary_to_skills_spacing(doc) -> int:
                     end = i
                     break
             if start is not None:
-                paras[start].paragraph_format.space_after = Pt(6)
+                paras[start].paragraph_format.space_after = Pt(12)
             # first non-blank after summary heading = summary paragraph
             summary_i = None
             if start is not None:
@@ -653,9 +658,9 @@ def _fix_summary_to_skills_spacing(doc) -> int:
                         summary_i = j
                         break
             if summary_i is not None:
-                paras[summary_i].paragraph_format.space_after = Pt(6)
+                paras[summary_i].paragraph_format.space_after = Pt(12)
             if end is not None:
-                paras[end].paragraph_format.space_before = Pt(6)
+                paras[end].paragraph_format.space_before = Pt(12)
         except Exception:
             pass
 
@@ -682,16 +687,58 @@ def _fix_summary_to_skills_spacing(doc) -> int:
         if is_blank(para):
             remove_para(para)
 
-    # Normalize spacing on the last non-blank paragraph before TECHNICAL SKILL
+    # Set stable visual spacing via paragraph_format (avoid blank paragraphs)
+    try:
+        from docx.shared import Pt  # type: ignore
+    except Exception:
+        return changed
+
     paras = list(getattr(doc, "paragraphs", []))
-    # Find TECHNICAL SKILL again
-    end = None
+
+    # Re-locate markers after deletions
+    start = end = None
     for i, para in enumerate(paras):
-        if (para.text or "").strip() == "TECHNICAL SKILL:":
+        t = (para.text or "").strip()
+        if t == "PROFESSIONAL SUMMARY:":
+            start = i
+        if t == "TECHNICAL SKILL:" and start is not None:
             end = i
             break
-    if end is None:
+
+    if start is None or end is None or end <= start:
         return changed
+
+    # Identify the first non-blank paragraph after the SUMMARY heading (the summary body)
+    summary_i = None
+    for j in range(start + 1, end):
+        if (paras[j].text or "").replace("\u00a0", "").strip():
+            summary_i = j
+            break
+
+    # Apply spacing rules:
+    # - space after SUMMARY heading
+    # - space after summary body
+    # - space before TECHNICAL SKILL heading
+    try:
+        paras[start].paragraph_format.space_after = Pt(12)
+        changed += 1
+    except Exception:
+        pass
+
+    if summary_i is not None:
+        try:
+            paras[summary_i].paragraph_format.space_after = Pt(12)
+            changed += 1
+        except Exception:
+            pass
+
+    try:
+        paras[end].paragraph_format.space_before = Pt(12)
+        changed += 1
+    except Exception:
+        pass
+
+    return changed
 
     # Walk backwards to find last non-blank paragraph before skills header
     for j in range(end-1, -1, -1):
