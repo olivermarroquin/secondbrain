@@ -31,3 +31,4 @@
 
 # LibreOffice lock files
 .~lock.*#
+tracking/selected-template.json
