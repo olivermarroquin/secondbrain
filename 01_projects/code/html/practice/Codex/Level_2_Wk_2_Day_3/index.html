@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flex Box Docs</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Flexbox and Forms Demo</h1>
+    </header>
+
+    <main>
+      <section>
+        <h2>Flexbox Container</h2>
+        <div class="banana">
+          <img
+            class="box"
+            src="https://placehold.co/100"
+            alt="this is a placeholder img"
+          />
+          <div class="box">item 1</div>
+          <div class="box">item 2</div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Inline vs Block</h2>
+        <p>Here are examples of inline elements</p>
+        <h3>Inline elements</h3>
+        <p class="inline-demo">
+          Lorem, ipsum dolor sit amet consectetur adipisicing elit. Sit, quaerat
+          explicabo voluptatibus dolorem in
+          <a href="https://google.com">Google</a> nemo deleniti, itaque optio
+          nobis, doloremque mollitia accusamus? Sapiente
+          <span class="cool-text">WOWOW</span>libero adipisci enim eos aliquid
+          mollitia non iusto?
+        </p>
+
+        <p>Inline elements like the &lt;a&gt; do not break lines</p>
+        <h3>Block Elements</h3>
+        <p class="block-demo">Hello</p>
+
+        <div class="block-demo">Hi</div>
+        <section class="block-demo">Hello</section>
+        <p>
+          Blue background are block elements. The examples shown are p, div, and
+          section tags.
+        </p>
+      </section>
+
+      <form class="form" action="#">
+        <!-- <label>
+            <input type="text">
+        </label> -->
+
+        <div class="col">
+          <div class="field">
+            <label for="fname">First Name</label>
+            <input type="text" name="fname" id="fname" />
+          </div>
+          <div class="field">
+            <label for="lname">Last Name</label>
+            <input type="text" name="lname" id="lname" />
+          </div>
+        </div>
+        <div class="col">
+          <div class="field">
+            <label for="email">Email</label>
+            <p id="email-help">Use a school email if possible.</p>
+            <input
+              type="email"
+              name="work-email"
+              id="email"
+              required
+              aria-describedby="email-help"
+            />
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" name="password" id="password" />
+          </div>
+        </div>
+
+        <div class="field">
+          <button>Submit</button>
+        </div>
+      </form>
+
+      <p id="search">Search</p>
+      <input type="text" name="search" id="search" aria-labelledby="search" />
+    </main>
+    <footer>
+      <nav></nav>
+    </footer>
+  </body>
+</html>

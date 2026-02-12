@@ -425,28 +425,23 @@ def main():
                     "rationale": f"Ideal-profile driven experience update for {target}.",
                 })
 
-    ok, msg = validate_proposals(proposals)
-    if not ok:
-        die(f"edit-proposals schema invalid: {msg}")
-
+    # --- RAW OUTPUT ONLY (separation of concerns) -------------------------
+    # Do NOT compile proposals here. Write only the model rewrite_packet payload.
     out = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "app": str(app),
         "source": "resume-map-ideal-edits",
         "selected_template": sel.get("template_folder_name") or sel.get("template_slug") or "",
-        "proposals": proposals,
+        "payload": payload,
     }
 
-    out_p = app / "resume_refs" / "edit-proposals.json"
+    out_p = app / "resume_refs" / "rewrite-packet.raw.json"
     if args.no_write:
         print(json.dumps(out, indent=2))
         return
 
     out_p.parent.mkdir(parents=True, exist_ok=True)
     out_p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
-
-    if args.diff:
-        print_diff(proposals)
 
     print(f"WROTE: {out_p}")
 

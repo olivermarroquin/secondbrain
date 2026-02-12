@@ -1,0 +1,320 @@
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
+import argparse, json, os, re
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RF_SCRIPTS = REPO_ROOT / "01_projects" / "resume-factory" / "scripts"
+if str(RF_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(RF_SCRIPTS))
+
+import sys
+BASE = Path(__file__).resolve().parents[2]
+SCRIPTS = BASE / "01_projects" / "resume-factory" / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+from datetime import datetime, timezone
+
+def die(msg: str, code=1):
+    print(f"ERROR: {msg}")
+    raise SystemExit(code)
+
+def load_json(p: Path):
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+        die(f"invalid JSON: {p} ({e})")
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat()
+
+def _as_lines(v):
+    if isinstance(v, list):
+        return [str(x).rstrip() for x in v if isinstance(x, str) and x.strip()]
+    if isinstance(v, str):
+        return [ln.rstrip() for ln in v.splitlines() if ln.strip()]
+    return []
+
+def _sorted_refs(line_index, prefix: str):
+    refs = [r for r, meta in (line_index or {}).items() if isinstance(r, str) and r.startswith(prefix)]
+    def key(r):
+        try:
+            return int(r[1:])
+        except Exception:
+            return 10**9
+    return sorted(refs, key=key)
+
+def _is_heading_line(line_index, ref: str) -> bool:
+    line = (line_index.get(ref, {}) or {}).get("text", "")
+    t = (line or "").strip()
+    if not t:
+        return True
+    if t.endswith(":") and not t.lstrip().startswith("•"):
+        return True
+    tu = t.upper().rstrip(":").strip()
+    if tu in {"PROFESSIONAL SUMMARY", "SUMMARY", "TECHNICAL SKILL", "TECHNICAL SKILLS", "SKILLS", "PROFESSIONAL EXPERIENCE", "EXPERIENCE"}:
+        return True
+    return False
+
+def _preserve_bullet(before_line: str, after_line: str) -> str:
+    b = (before_line or "").lstrip()
+    a = (after_line or "").lstrip()
+    before_has = b.startswith("•")
+    after_has = a.startswith("•")
+    if before_has and not after_has:
+        return "• " + a
+    if (not before_has) and after_has:
+        return a.lstrip("•").lstrip()
+    return after_line
+
+def _dedupe_csv_rhs(line: str) -> str:
+    t = (line or "").strip()
+    if ":" not in t:
+        return t
+    lab, rhs = t.split(":", 1)
+    items = [x.strip() for x in rhs.split(",")]
+    out = []
+    seen = set()
+    for x in items:
+        if not x:
+            continue
+        k = re.sub(r"\s+", " ", x.lower()).strip()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(x)
+    return f"{lab.strip()}: " + ", ".join(out)
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="resume-filter-edits",
+        description="Deterministic policy/compiler: rewrite-packet.raw.json -> edit-proposals.json"
+    )
+    ap.add_argument("--app", required=True, help="Absolute path to application folder")
+    ap.add_argument("--diff", action="store_true", help="Print proposals diff to stdout (READ-ONLY)")
+    ap.add_argument("--no-write", action="store_true", help="Print JSON to stdout, do not write edit-proposals.json")
+    args = ap.parse_args()
+
+    app = Path(args.app).expanduser().resolve()
+    if not app.is_dir():
+        die(f"app dir missing: {app}")
+
+    raw_p = app / "resume_refs" / "rewrite-packet.raw.json"
+    if not raw_p.exists() or raw_p.stat().st_size == 0:
+        die(f"missing/empty RAW rewrite packet: {raw_p}")
+
+    sel_p = app / "tracking" / "selected-template.json"
+    if not sel_p.exists():
+        die(f"missing selected-template.json (run resume-select first): {sel_p}")
+
+    sel = load_json(sel_p)
+    tdir = sel.get("template_path") or ""
+    if not tdir:
+        die("selected-template.json missing template_path")
+    template_dir = Path(tdir).expanduser().resolve()
+    docx_path = template_dir / "resume-master.docx"
+    if not docx_path.exists():
+        die(f"missing resume-master.docx: {docx_path}")
+
+    from rf_docx_extract import read_docx_lines, locate_sections, format_numbered_blocks_for_prompt
+    from rf_proposal_schema import validate_proposals
+    from rf_print_diff import print_diff
+
+    lines = read_docx_lines(docx_path)
+    header, summary, skills, exp = locate_sections(lines)
+    _blocks, line_index = format_numbered_blocks_for_prompt(header, summary, skills, exp, max_exp_lines=90)
+    raw = load_json(raw_p)
+    if not isinstance(raw, dict):
+        die("RAW rewrite packet must be an object")
+
+    # Accept either shape:
+    # A) { "rewrite_packet": {...}, "selected_template": ... }
+    # B) { "payload": { "rewrite_packet": {...}, "selected_template": ... }, ... }
+    payload = raw
+    if isinstance(raw.get("payload"), dict):
+        payload = raw.get("payload") or {}
+
+    rewrite_packet = payload.get("rewrite_packet")
+    if not isinstance(rewrite_packet, dict):
+        die("RAW rewrite packet missing rewrite_packet object")
+
+    proposals = []
+    ps_lines = _as_lines(rewrite_packet.get("professional_summary"))
+    s_refs = [r for r in _sorted_refs(line_index, "S") if (line_index.get(r, {}) or {}).get("section") == "SUMMARY" and not _is_heading_line(line_index, r)]
+
+    if s_refs and ps_lines:
+        if len(s_refs) == 1:
+            joined = " ".join([ln.strip() for ln in ps_lines if isinstance(ln, str) and ln.strip()]).strip()
+            if joined:
+                ref = s_refs[0]
+                before = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                after0 = _preserve_bullet(before, joined)
+                if before and after0 and before != after0:
+                    proposals.append({
+                        "section": "SUMMARY",
+                        "op": "REPLACE_LINE",
+                        "before_ref": ref,
+                        "before": [before],
+                        "after": [after0],
+                        "rationale": f"Policy-compiled summary update for {ref}.",
+                    })
+        else:
+            if len(ps_lines) == 1:
+                ref0 = s_refs[0]
+                before0 = (line_index.get(ref0, {}) or {}).get("text", "") or ""
+                after0 = _preserve_bullet(before0, ps_lines[0])
+                if before0 and after0 and before0 != after0:
+                    proposals.append({
+                        "section": "SUMMARY",
+                        "op": "REPLACE_LINE",
+                        "before_ref": ref0,
+                        "before": [before0],
+                        "after": [after0],
+                        "rationale": f"Policy-compiled summary update for {ref0}.",
+                    })
+                for ref in s_refs[1:]:
+                    b = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                    if b:
+                        proposals.append({
+                            "section": "SUMMARY",
+                            "op": "DELETE_LINE",
+                            "before_ref": ref,
+                            "before": [b],
+                            "after": [""],
+                            "rationale": f"Policy-compiled summary cleanup (delete extra line {ref}).",
+                        })
+            else:
+                for i in range(min(len(ps_lines), len(s_refs))):
+                    ref = s_refs[i]
+                    before = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                    after0 = _preserve_bullet(before, ps_lines[i])
+                    if before and after0 and before != after0:
+                        proposals.append({
+                            "section": "SUMMARY",
+                            "op": "REPLACE_LINE",
+                            "before_ref": ref,
+                            "before": [before],
+                            "after": [after0],
+                            "rationale": f"Policy-compiled summary update for {ref}.",
+                        })
+                for ref in s_refs[len(ps_lines):]:
+                    b = (line_index.get(ref, {}) or {}).get("text", "") or ""
+                    if b:
+                        proposals.append({
+                            "section": "SUMMARY",
+                            "op": "DELETE_LINE",
+                            "before_ref": ref,
+                            "before": [b],
+                            "after": [""],
+                            "rationale": f"Policy-compiled summary cleanup (delete unused line {ref}).",
+                        })
+
+    sk_lines = _as_lines(rewrite_packet.get("technical_skills"))
+    k_refs = [r for r in _sorted_refs(line_index, "K") if (line_index.get(r, {}) or {}).get("section") == "SKILLS" and not _is_heading_line(line_index, r)]
+
+    label_to_ref = {}
+    for ref in k_refs:
+        line = (line_index.get(ref, {}) or {}).get("text", "") or ""
+        if ":" in line:
+            lab = line.split(":", 1)[0].strip().lower()
+            if lab and lab not in label_to_ref:
+                label_to_ref[lab] = ref
+
+    used_refs = set()
+    k_cursor = 0
+
+    for new_line in sk_lines:
+        after0 = (new_line or "").strip()
+        if not after0:
+            continue
+
+        new_label = ""
+        if ":" in after0:
+            new_label = after0.split(":", 1)[0].strip().lower()
+
+        target_ref = None
+        if new_label and new_label in label_to_ref and label_to_ref[new_label] not in used_refs:
+            target_ref = label_to_ref[new_label]
+        else:
+            while k_cursor < len(k_refs) and k_refs[k_cursor] in used_refs:
+                k_cursor += 1
+            if k_cursor < len(k_refs):
+                target_ref = k_refs[k_cursor]
+                k_cursor += 1
+
+        if not target_ref:
+            continue
+
+        before = (line_index.get(target_ref, {}) or {}).get("text", "") or ""
+        if ":" in before and ":" not in after0:
+            lab = before.split(":", 1)[0].strip()
+            after0 = f"{lab}: {after0}"
+
+        after0 = _dedupe_csv_rhs(after0)
+
+        if before and after0 and before != after0:
+            proposals.append({
+                "section": "SKILLS",
+                "op": "REPLACE_LINE",
+                "before_ref": target_ref,
+                "before": [before],
+                "after": [after0],
+                "rationale": f"Policy-compiled skills update for {target_ref}.",
+            })
+
+        used_refs.add(target_ref)
+
+    exp_items = rewrite_packet.get("experience", [])
+    if isinstance(exp_items, list):
+        for it in exp_items:
+            if not isinstance(it, dict):
+                continue
+            target = (it.get("target") or "").strip()
+            action = (it.get("action") or "").strip()
+            new_line = (it.get("new_line") or "").strip()
+            if action != "REPLACE_LINE":
+                continue
+            if not target.startswith("E") or target not in line_index:
+                continue
+            if _is_heading_line(line_index, target):
+                continue
+            before = (line_index.get(target, {}) or {}).get("text", "") or ""
+            after0 = _preserve_bullet(before, new_line)
+            if before and after0 and before != after0:
+                proposals.append({
+                    "section": "EXPERIENCE",
+                    "op": "REPLACE_LINE",
+                    "before_ref": target,
+                    "before": [before],
+                    "after": [after0],
+                    "rationale": f"Policy-compiled experience update for {target}.",
+                })
+
+    ok, msg = validate_proposals(proposals)
+    if not ok:
+        die(f"edit-proposals schema invalid: {msg}")
+
+    out = {
+        "generated_at_utc": _utc_now(),
+        "app": str(app),
+        "source": "resume-filter-edits",
+        "selected_template": sel.get("template_folder_name") or sel.get("template_slug") or "",
+        "raw_source": str(raw_p),
+        "proposals": proposals,
+    }
+
+    if args.no_write:
+        print(json.dumps(out, indent=2))
+        return
+
+    out_p = app / "resume_refs" / "edit-proposals.json"
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    out_p.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+
+    if args.diff:
+        print_diff(proposals)
+
+    print(f"WROTE: {out_p}")
+
+if __name__ == "__main__":
+    main()

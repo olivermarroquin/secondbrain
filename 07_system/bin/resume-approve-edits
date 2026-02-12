@@ -114,11 +114,24 @@ def apply_replace_line(doc, before_line: str, after_line: str) -> bool:
                     r0.text = label.strip() + ":"
                     r1.text = " " + rest.strip()
                     return True
-
-            # Default: replace whole paragraph, preserve formatting using first run as template
+            # Default: replace whole paragraph.
+            # If this is a skills-like line (label/value separated by ':'), enforce 2-run output:
+            #   - label (bold)
+            #   - values (not bold)
             tpl = para.runs[0] if para.runs else None
             for r in list(para.runs):
                 r.text = ""
+
+            # If BEFORE looked like a labeled line and AFTER also has a label, split into label/value runs.
+            if ":" in b_raw and ":" in a_raw:
+                label, rest = a_raw.split(":", 1)
+                r0 = para.add_run(label.strip() + ":")
+                r0.bold = True
+                r1 = para.add_run(" " + rest.strip())
+                r1.bold = False
+                return True
+
+            # Otherwise fall back to single-run replace, preserving the template run style.
             r_new = para.add_run(a_raw)
             if tpl is not None:
                 r_new.bold = tpl.bold
@@ -128,7 +141,6 @@ def apply_replace_line(doc, before_line: str, after_line: str) -> bool:
                     r_new.font.name = tpl.font.name
                     r_new.font.size = tpl.font.size
             return True
-
         # Case 2: raw substring present -> prefer per-run replace
         if b_raw in t:
             for r in para.runs:
@@ -152,19 +164,35 @@ def apply_replace_line(doc, before_line: str, after_line: str) -> bool:
             return True
 
         # Case 3: normalized containment (fallback) -> only if short paragraph (avoid nuking big blocks)
-        if b_n in tn and len(t) <= 200:
-            tpl = para.runs[0] if para.runs else None
-            for rr in list(para.runs):
-                rr.text = ""
-            r3 = para.add_run(a_raw)
-            if tpl is not None:
-                r3.bold = tpl.bold
-                r3.italic = tpl.italic
-                r3.underline = tpl.underline
-                if tpl.font is not None:
-                    r3.font.name = tpl.font.name
-                    r3.font.size = tpl.font.size
+    # Case 3: normalized containment (fallback) -> only if short paragraph (avoid nuking big blocks)
+    if b_n in tn and len(t) <= 200:
+        tpl = para.runs[0] if para.runs else None
+        for rr in list(para.runs):
+            rr.text = ""
+
+        # If template is bold-label style and the new line has a label/value split, preserve 2-run structure
+        if tpl is not None and (tpl.bold is True) and (":" in a_raw):
+            label, rest = a_raw.split(":", 1)
+            r0 = para.add_run(label.strip() + ":")
+            r0.bold = True
+            r1 = para.add_run(" " + rest.strip())
+            r1.bold = False
+            if tpl.font is not None:
+                for rr in (r0, r1):
+                    rr.font.name = tpl.font.name
+                    rr.font.size = tpl.font.size
             return True
+
+        r3 = para.add_run(a_raw)
+        if tpl is not None:
+            r3.bold = tpl.bold
+            r3.italic = tpl.italic
+            r3.underline = tpl.underline
+            if tpl.font is not None:
+                r3.font.name = tpl.font.name
+                r3.font.size = tpl.font.size
+        return True
+
 
     return False
 
@@ -223,6 +251,66 @@ def _docx_text(docx_path: Path) -> str:
         t = (para.text or "").rstrip()
         lines.append(t)
     return "\n".join(lines).strip() + "\n"
+
+
+def _cleanup_blank_paragraphs(doc) -> int:
+    """
+    Collapse/trim empty paragraphs to prevent big gaps after DELETE_LINE.
+    - remove leading/trailing blank paragraphs
+    - collapse consecutive blank paragraphs to at most 1
+    Returns number removed.
+    """
+    removed = 0
+
+    def is_blank(para) -> bool:
+        txt = (para.text or "")
+        if txt.strip():
+            return False
+        for r in getattr(para, "runs", []):
+            if (getattr(r, "text", "") or "").strip():
+                return False
+        return True
+
+    def remove_para(para):
+        nonlocal removed
+        p_elm = para._p
+        parent = p_elm.getparent()
+        if parent is None:
+            return
+        parent.remove(p_elm)
+        removed += 1
+
+    # Remove leading blanks
+    while True:
+        paras = list(getattr(doc, "paragraphs", []))
+        if not paras:
+            return removed
+        if is_blank(paras[0]):
+            remove_para(paras[0])
+            continue
+        break
+
+    # Remove trailing blanks
+    while True:
+        paras = list(getattr(doc, "paragraphs", []))
+        if not paras:
+            return removed
+        if is_blank(paras[-1]):
+            remove_para(paras[-1])
+            continue
+        break
+
+    # Collapse consecutive blanks
+    prev_blank = False
+    for para in list(getattr(doc, "paragraphs", [])):
+        blank = is_blank(para)
+        if blank and prev_blank:
+            remove_para(para)
+            continue
+        prev_blank = blank
+
+    return removed
+
 
 # --- Main ------------------------------------------------------------------
 
@@ -443,6 +531,11 @@ def main():
         die(f"Refusing to overwrite existing file: {out_docx} (use --force)")
 
     # Write resume + log
+        _cleanup_blank_paragraphs(doc)
+
+    # Write resume + log
+    _cleanup_blank_paragraphs(doc)
+    _fix_summary_to_skills_spacing(doc)
     doc.save(str(out_docx))
 
     # If we archived a previous resume, generate a text diff for review
@@ -494,6 +587,127 @@ def main():
                 subprocess.run(["open", str(out_docx)], check=False)
         except Exception:
             pass
+
+
+def _fix_summary_to_skills_spacing(doc) -> int:
+    """
+    Remove blank paras + reset spacing between PROFESSIONAL SUMMARY and TECHNICAL SKILL.
+    Returns number of paragraphs removed/adjusted (best-effort).
+    """
+    changed = 0
+
+    def is_blank(para) -> bool:
+        txt = (para.text or "")
+        if txt.strip():
+            return False
+        # Treat NBSP as blank too
+        if txt.replace("\u00a0", "").strip():
+            return False
+        for r in getattr(para, "runs", []):
+            if (getattr(r, "text", "") or "").replace("\u00a0", "").strip():
+                return False
+        return True
+
+    def remove_para(para):
+        nonlocal changed
+        p_elm = para._p
+        parent = p_elm.getparent()
+        if parent is None:
+            return
+        parent.remove(p_elm)
+        changed += 1
+
+    # Locate markers
+    paras = list(getattr(doc, "paragraphs", []))
+    start = end = None
+    for i, para in enumerate(paras):
+        t = (para.text or "").strip()
+        if t == "PROFESSIONAL SUMMARY:":
+            start = i
+        if t == "TECHNICAL SKILL:" and start is not None:
+            end = i
+            break
+
+    if start is None or end is None or end <= start:
+
+        # Add stable visual spacing (avoid blank paragraphs)
+        try:
+            from docx.shared import Pt  # type: ignore
+            paras = list(getattr(doc, "paragraphs", []))
+            # Re-locate markers after any deletions
+            start = end = None
+            for i, para in enumerate(paras):
+                tt = (para.text or "").strip()
+                if tt == "PROFESSIONAL SUMMARY:":
+                    start = i
+                if tt == "TECHNICAL SKILL:" and start is not None:
+                    end = i
+                    break
+            if start is not None:
+                paras[start].paragraph_format.space_after = Pt(6)
+            # first non-blank after summary heading = summary paragraph
+            summary_i = None
+            if start is not None:
+                for j in range(start+1, len(paras)):
+                    if (paras[j].text or "").strip():
+                        summary_i = j
+                        break
+            if summary_i is not None:
+                paras[summary_i].paragraph_format.space_after = Pt(6)
+            if end is not None:
+                paras[end].paragraph_format.space_before = Pt(6)
+        except Exception:
+            pass
+
+        return changed
+    # Refresh list after deletions as we go
+    # Remove blank paragraphs in between
+    paras = list(getattr(doc, "paragraphs", []))
+    # Recompute indices once more
+    start = end = None
+    for i, para in enumerate(paras):
+        t = (para.text or "").strip()
+        if t == "PROFESSIONAL SUMMARY:":
+            start = i
+        if t == "TECHNICAL SKILL:" and start is not None:
+            end = i
+            break
+    if start is None or end is None or end <= start:
+        return changed
+
+    # Remove blanks strictly between the summary text and skills header
+    # (we remove any blank paras between start+1 and end-1)
+    # Iterate on a snapshot because doc.paragraphs updates after removal
+    for para in list(getattr(doc, "paragraphs", []))[start+1:end]:
+        if is_blank(para):
+            remove_para(para)
+
+    # Normalize spacing on the last non-blank paragraph before TECHNICAL SKILL
+    paras = list(getattr(doc, "paragraphs", []))
+    # Find TECHNICAL SKILL again
+    end = None
+    for i, para in enumerate(paras):
+        if (para.text or "").strip() == "TECHNICAL SKILL:":
+            end = i
+            break
+    if end is None:
+        return changed
+
+    # Walk backwards to find last non-blank paragraph before skills header
+    for j in range(end-1, -1, -1):
+        para = paras[j]
+        if (para.text or "").strip() and (para.text or "").strip() != "PROFESSIONAL SUMMARY:":
+            try:
+                pf = para.paragraph_format
+                pf.space_after = 0
+                pf.space_before = 0
+                changed += 1
+            except Exception:
+                pass
+            break
+
+    return changed
+
 
 if __name__ == "__main__":
     main()
