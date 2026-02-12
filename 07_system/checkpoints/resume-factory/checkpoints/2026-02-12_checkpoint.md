@@ -40,3 +40,20 @@ Locked Separation of Concerns across Layers A/B/C and stabilized Layer C DOCX fo
 
 ## Artifacts
 - Checkpoint: `checkpoints/2026-02-12_checkpoint.md`
+
+
+---
+
+## Cross-template validation (Layer C proven)
+
+Validated `resume-approve-edits` formatting stability across multiple template families:
+
+- Template 03: `03_python_playwright` (cm_first_group workload automation engineer)
+- Template 01: `01_java_selenium` (klap6 sr java sdet)
+- Template 05: `05_typescript_cypress` (kforce lead software qa engineer)
+
+Pass criteria met:
+- No extra blank paragraph gaps after SUMMARY deletes
+- Summary-to-skills spacing stable via paragraph_format (no empty paragraph reliance)
+- Skills label/value formatting stable (label bold, value not bold)
+- Font name/size preserved (no style drift)

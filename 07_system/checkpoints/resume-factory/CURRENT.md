@@ -38,3 +38,15 @@ Next:
 - Synthesis: analysis/2026-02-12_run10_post-run_synthesis.md
 - Log: logs/2026-02-12_run10_full-run-log.md
 - Archive: archives/2026-02-12_run10_archive-notes.md
+
+
+---
+
+## 2026-02-12 (run11) — Layer C cross-template proven (01/03/05)
+- Validated `resume-approve-edits` output across templates:
+  - 01_java_selenium, 03_python_playwright, 05_typescript_cypress
+- Confirmed stable spacing + skills typography (no style drift)
+- Checkpoint: checkpoints/2026-02-12_checkpoint.md
+- Synthesis: analysis/2026-02-12_run11_post-run_synthesis.md
+- Log: logs/2026-02-12_run11_full-run-log.md
+- Archive: archives/2026-02-12_run11_archive-notes.md
