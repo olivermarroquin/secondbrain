@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resume-Factory</title>
+    <link rel="stylesheet" href="stylesheet/reset.css" />
+    <link rel="stylesheet" href="stylesheet/style.css" />
+  </head>
+
+  <body>
+    <!-- Basic Header -->
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#">Resume-Factory</a>
+
+        <nav class="nav" aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#intake">Job intake</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section class="hero">
+        <div class="container hero-inner">
+          <p class="eyebrow">UI Prototype</p>
+
+          <h1 class="hero-title">Build tailored resumes faster.</h1>
+
+          <p class="hero-subtitle">
+            Intake a job description, generate targeted edits, and review
+            changes before export.
+          </p>
+
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#intake">Start intake</a>
+            <a class="btn btn-secondary" href="#features">See features</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- CARDS -->
+      <section id="features" class="section">
+        <div class="container">
+          <h2 class="section-title">
+            Designed like a product, not a homework page.
+          </h2>
+          <p class="section-subtitle">
+            Cards keep the UI scannable. Each action maps to your real CLI
+            commands.
+          </p>
+
+          <div class="card-row">
+            <article class="card">
+              <h3 class="card-title">Intake</h3>
+              <p class="card-text">
+                Capture job details and store inputs cleanly for the pipeline.
+              </p>
+            </article>
+
+            <article class="card">
+              <h3 class="card-title">Generate</h3>
+              <p class="card-text">
+                Create rewrite proposals aligned to the job description.
+              </p>
+            </article>
+
+            <article class="card">
+              <h3 class="card-title">Review</h3>
+              <p class="card-text">
+                Approve edits before exporting the final resume.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- FORM -->
+      <section id="intake" class="section">
+        <div class="container">
+          <h2 class="section-title">Job intake</h2>
+          <p class="section-subtitle">Paste a job and start the workflow.</p>
+
+          <form class="form" action="#" method="post">
+            <div class="field">
+              <label for="company">Company</label>
+              <input
+                id="company"
+                name="company"
+                type="text"
+                placeholder="e.g., JetBrains"
+              />
+            </div>
+
+            <div class="field">
+              <label for="role">Role</label>
+              <input
+                id="role"
+                name="role"
+                type="text"
+                placeholder="e.g., QA Engineer"
+              />
+            </div>
+
+            <div class="field">
+              <label for="jd">Job description</label>
+              <textarea
+                id="jd"
+                name="jd"
+                rows="7"
+                placeholder="Paste the job description here..."
+              ></textarea>
+            </div>
+
+            <button class="btn btn-primary" type="submit">Save intake</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

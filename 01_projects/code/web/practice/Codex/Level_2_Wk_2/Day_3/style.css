@@ -1,0 +1,76 @@
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.box {
+  width: 100px;
+  height: 100px;
+  background-color: aquamarine;
+}
+
+.banana {
+  display: flex;
+  flex-direction: row;
+  gap: 50px;
+  /* justify-content: space-between; */
+}
+
+.inline-demo {
+  border: 2px solid black;
+  padding: 4px;
+}
+
+.cool-text {
+  font-weight: 900;
+  font-size: 20px;
+}
+
+.block-demo {
+  background-color: blue;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+}
+
+.form {
+  /* width: 500px; */
+  display: flex;
+  flex-wrap: wrap;
+  /* margin: auto; */
+  margin-bottom: 200px;
+}
+
+.col {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+#lname {
+  margin-bottom: 20px;
+}
+
+#email-help {
+  font-size: 12;
+  color: gray;
+  margin: 0;
+}
+
+@media (width >= 600px) {
+  .col {
+    flex-direction: column;
+  }
+  .form {
+    /* make mobile sizes good */
+  }
+  .label {
+  }
+}
+
+@media (width <= 400px) {
+  /* if for mobile devices, here is my width for mobile devices. */
+}

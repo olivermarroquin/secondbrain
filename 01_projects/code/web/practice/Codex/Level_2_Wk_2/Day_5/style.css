@@ -1,0 +1,19 @@
+html {
+  font-size: 10px;
+}
+
+body {
+  font-size: 1.6rem;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ROOT EM */
+
+.wrapper {
+  display: flex;
+  justify-content: space-between;
+}
+
+img {
+  width: 20rem;
+}
