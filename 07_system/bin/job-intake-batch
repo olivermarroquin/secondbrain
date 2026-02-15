@@ -76,13 +76,17 @@ def main():
         for i, u in enumerate(urls, start=1):
             print(f"--- [{i}/{len(urls)}] {u}")
             try:
-                data = scrape_job_page(u, verify_ssl=not args.insecure)
+                data = scrape_job_page(u, verify_ssl=not args.insecure, ai_parse=args.ai_parse)
             except Exception as e:
                 failed_count += 1
                 print(f"FAILED: scrape error: {e}", file=sys.stderr)
                 continue
 
             print(f"PAGE_TITLE: {data.get('page_title')}")
+            if args.ai_parse:
+                print(f"AI_PARSED: {data.get('ai_parsed')}")
+                if data.get("ai_parse_error"):
+                    print(f"AI_PARSE_ERROR: {data.get('ai_parse_error')}")
             print(f"PROV_COMPANY: {data.get('company')}")
             print(f"PROV_ROLE: {data.get('role_title')}")
             desc = (data.get("description") or "").splitlines()
@@ -152,7 +156,7 @@ def main():
     for i, u in enumerate(urls, start=1):
         print(f"--- [{i}/{len(urls)}] {u}")
         try:
-            data = scrape_job_page(u, verify_ssl=not args.insecure)
+            data = scrape_job_page(u, verify_ssl=not args.insecure, ai_parse=args.ai_parse)
         except Exception as e:
             failed_count += 1
             print(f"FAILED: scrape error: {e}", file=sys.stderr)

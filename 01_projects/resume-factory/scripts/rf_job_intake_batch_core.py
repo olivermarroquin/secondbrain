@@ -6,6 +6,8 @@ from typing import Optional, Dict
 import requests
 from bs4 import BeautifulSoup
 
+from rf_job_ai_parse_openai import ai_parse_job_openai
+
 def die(msg, code=2):
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(code)
@@ -59,17 +61,40 @@ def extract_title_from_html(html: str) -> str | None:
         return soup.title.string.strip()
     return None
 
-def scrape_job_page(url: str, verify_ssl: bool = True) -> Dict[str, Optional[str]]:
+def scrape_job_page(url: str, verify_ssl: bool = True, ai_parse: bool = False) -> Dict[str, Optional[str]]:
     html = fetch_html(url, verify_ssl=verify_ssl)
     page_title = extract_title_from_html(html)
     text = html_to_text(html)
     if not text.strip():
         die("Extracted text is empty (likely JS-rendered page).")
 
-    # v1: no structured parsing yet (company/role extracted later or via AI)
+    ai_err = None
+
+    if ai_parse:
+        try:
+            parsed = ai_parse_job_openai(
+                page_title=page_title,
+                page_text=text,
+                source_url=url,
+            )
+            return {
+                "ai_parsed": True,
+                "ai_parse_error": ai_err,
+                "company": parsed.get("company"),
+                "page_title": page_title,
+                "role_title": parsed.get("role_title"),
+                "description": parsed.get("description") or text,
+                "location": parsed.get("location"),
+                "source": url,
+            }
+        except Exception as e:
+            ai_err = str(e)
+
     provisional_company, provisional_role = derive_from_title(page_title)
 
     return {
+        "ai_parsed": False,
+        "ai_parse_error": ai_err,
         "company": provisional_company,
         "page_title": page_title,
         "role_title": provisional_role,
