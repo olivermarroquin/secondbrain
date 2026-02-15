@@ -1,0 +1,227 @@
+#!/Users/olivermarroquin/secondbrain/07_system/venvs/docgen/bin/python
+import argparse, json, sys, os, subprocess
+from pathlib import Path
+from datetime import datetime, timezone
+
+def die(msg: str, code: int = 1):
+    print(f"ERROR: {msg}", file=sys.stderr)
+    raise SystemExit(code)
+
+def must_exist(p: Path, kind: str = "file"):
+    if kind == "dir":
+        if not p.is_dir():
+            die(f"missing dir: {p}")
+    else:
+        if not p.exists():
+            die(f"missing: {p}")
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def _slug_step(cmd0: str) -> str:
+    # cmd0 like "resume-select" -> "resume-select"
+    return (cmd0 or "step").strip()
+
+def _quote_bash(arg: str) -> str:
+    # safe-ish for copy/paste; wrap in single quotes when needed
+    s = str(arg)
+    if s == "":
+        return "''"
+    safe = all(c.isalnum() or c in "/._-:+=@" for c in s)
+    if safe:
+        return s
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+
+def _print_pipeline(steps):
+    print("PIPELINE (planned):")
+    for i, cmd in enumerate(steps, start=1):
+        print(f"{i}. " + " ".join([json.dumps(c) if ' ' in c else c for c in cmd]))
+
+def _print_bash_script(steps):
+    print("#!/usr/bin/env bash")
+    print("set -euo pipefail")
+    print()
+    for cmd in steps:
+        print(" ".join(_quote_bash(c) for c in cmd))
+
+def _run_steps(app: Path, steps, from_step: int, to_step: int):
+    """
+    Execute selected steps deterministically with per-step stdout/stderr logs.
+    Hard stop on first failure (no implicit --force).
+    """
+    rr = app / "resume_refs"
+    logs_dir = rr / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    run = {
+        "generated_at_utc": _utc_now_iso(),
+        "app": str(app),
+        "source": "resume-generate-one",
+        "range": {"from_step": from_step, "to_step": to_step},
+        "steps_total": len(steps),
+        "steps_ran": [],
+        "ok": False,
+    }
+
+    def step_in_range(i1: int) -> bool:
+        if from_step is not None and i1 < from_step:
+            return False
+        if to_step is not None and i1 > to_step:
+            return False
+        return True
+
+    for i1, cmd in enumerate(steps, start=1):
+        if not step_in_range(i1):
+            continue
+
+        step_name = _slug_step(cmd[0] if cmd else "step")
+        prefix = f"{i1:02d}_{step_name}"
+        out_p = logs_dir / f"{prefix}.stdout.log"
+        err_p = logs_dir / f"{prefix}.stderr.log"
+
+        # Execute
+        try:
+            r = subprocess.run(
+                cmd,
+                text=True,
+                capture_output=True,
+                env=os.environ.copy(),
+            )
+        except FileNotFoundError:
+            run["steps_ran"].append({
+                "n": i1,
+                "cmd": cmd,
+                "returncode": 127,
+                "stdout_path": str(out_p),
+                "stderr_path": str(err_p),
+                "error": f"command not found: {cmd[0] if cmd else ''}",
+            })
+            # write logs we have
+            out_p.write_text("", encoding="utf-8")
+            err_p.write_text(f"command not found: {cmd[0] if cmd else ''}\n", encoding="utf-8")
+            rr.joinpath("generate-one.run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
+            die(f"Step {i1} failed: command not found: {cmd[0] if cmd else ''}", 127)
+
+        # Persist stdout/stderr deterministically
+        out_p.write_text(r.stdout or "", encoding="utf-8")
+        err_p.write_text(r.stderr or "", encoding="utf-8")
+
+        rec = {
+            "n": i1,
+            "cmd": cmd,
+            "returncode": int(r.returncode),
+            "stdout_path": str(out_p),
+            "stderr_path": str(err_p),
+        }
+        run["steps_ran"].append(rec)
+
+        if r.returncode != 0:
+            rr.joinpath("generate-one.run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
+            print(f"\nSTEP FAILED: {i1} ({step_name}) rc={r.returncode}")
+            print(f"- STDOUT: {out_p}")
+            print(f"- STDERR: {err_p}")
+            die(f"Pipeline stopped at step {i1} (rc={r.returncode}). See logs above.", int(r.returncode) or 2)
+
+    run["ok"] = True
+    run_p = rr / "generate-one.run.json"
+    run_p.write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
+    print(f"\nWROTE: {run_p}")
+    print(f"LOGS:  {logs_dir}")
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="resume-generate-one",
+        description="Run deterministic resume-generation pipeline for a single job application folder."
+    )
+    ap.add_argument("--app", required=True, help="Absolute path to application folder")
+    ap.add_argument("--dry-run", action="store_true", help="Validate + print steps, do not execute (default behavior)")
+    ap.add_argument("--exec", action="store_true", help="Execute the planned pipeline steps (writes logs)")
+    ap.add_argument("--print-bash", action="store_true", help="Print a copy/paste bash script of the planned steps (no execution)")
+    ap.add_argument("--open", action="store_true", help="Pass through to resume-approve-edits --open")
+    ap.add_argument("--approve", action="store_true", help="Also run resume-approve-edits at the end (default: stop after proposals)")
+    ap.add_argument("--approve-force", action="store_true", help="Pass --force to resume-approve-edits (overwrite existing resume.docx)")
+    ap.add_argument("--from-step", type=int, default=None, help="Execute starting at this step number (1-based). Requires --exec.")
+    ap.add_argument("--to-step", type=int, default=None, help="Execute ending at this step number (1-based). Requires --exec.")
+    ap.add_argument("--format-final", action="store_true", help="Reserved (no-op for now)")
+    ap.add_argument("--force", action="store_true", help="Pass through to resume-approve-edits --force (overwrite resume.docx when --approve)")
+    args = ap.parse_args()
+
+    # Back-compat: treat --force as an alias of --approve-force
+    if getattr(args, 'force', False):
+        args.approve_force = True
+
+    # Safety / mode guards (no surprises)
+    if args.exec and args.dry_run:
+        die("Do not combine --exec with --dry-run. Use --dry-run (plan only) OR --exec (run).")
+    if args.open and not args.approve:
+        die("--open requires --approve (resume-approve-edits is skipped without --approve)")
+    if (args.from_step is not None or args.to_step is not None) and not args.exec:
+        die("--from-step/--to-step require --exec (they only apply to execution).")
+
+    app = Path(args.app).expanduser().resolve()
+    must_exist(app, "dir")
+
+    # Step 1 — Validate required app artifacts
+    must_exist(app / "tracking" / "job-meta.json")
+    must_exist(app / "tracking" / "application-record.json")
+    must_exist(app / "tracking" / "status-history.md")
+
+    # These are required by downstream tools
+    must_exist(app / "jd" / "jd-raw.txt")
+
+    # resume_refs dir (create safely)
+    rr = app / "resume_refs"
+    rr.mkdir(parents=True, exist_ok=True)
+
+    print(f"APP: {app}")
+    print("VALIDATION: OK")
+    print()
+
+    steps = [
+        ["resume-select", "--app", str(app)],
+        ["resume-keyword-scout", "--app", str(app)],
+        ["resume-ideal-profile", "--app", str(app)],
+        ["resume-map-ideal-edits", "--app", str(app)],
+        ["resume-filter-edits", "--app", str(app)],
+    ]
+
+    if args.approve:
+        approve = ["resume-approve-edits", "--app", str(app)]
+        if args.open:
+            approve.append("--open")
+        if args.approve_force:
+            approve.append("--force")
+        steps.append(approve)
+
+    # Preflight: prevent step-6 overwrite surprises
+    if args.exec and args.approve:
+        out_docx = rr / "resume.docx"
+        if out_docx.exists() and not args.approve_force:
+            die(f"resume.docx already exists: {out_docx} (re-run with --approve-force to overwrite)")
+
+    _print_pipeline(steps)
+
+    # Plan-only modes
+    if args.print_bash:
+        print()
+        _print_bash_script(steps)
+        return
+
+    if args.dry_run or (not args.exec):
+        print("\nDRY RUN — no commands executed.")
+        return
+
+    # Execute
+    # Validate range bounds (if provided)
+    n = len(steps)
+    if args.from_step is not None and (args.from_step < 1 or args.from_step > n):
+        die(f"--from-step out of range (1..{n}): {args.from_step}")
+    if args.to_step is not None and (args.to_step < 1 or args.to_step > n):
+        die(f"--to-step out of range (1..{n}): {args.to_step}")
+    if args.from_step is not None and args.to_step is not None and args.from_step > args.to_step:
+        die(f"Invalid range: --from-step {args.from_step} > --to-step {args.to_step}")
+
+    _run_steps(app, steps, args.from_step, args.to_step)
+
+if __name__ == "__main__":
+    main()
