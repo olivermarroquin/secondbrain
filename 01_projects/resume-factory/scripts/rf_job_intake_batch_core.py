@@ -130,3 +130,29 @@ def derive_from_title(page_title: str | None):
 
     # fallback: unknown
     return None, page_title.strip()
+
+
+def validate_parsed_job(company: str | None, role_title: str | None, description: str | None) -> tuple[bool, str]:
+    """
+    Minimal sanity checks to prevent garbage folder creation.
+    Returns (ok, reason_if_not_ok).
+    """
+    c = (company or "").strip()
+    r = (role_title or "").strip()
+    d = (description or "").strip()
+
+    if len(d.splitlines()) < 3 and len(d) < 200:
+        return (False, "description_too_short")
+
+    # reject obvious non-titles
+    bad_titles = {"apply", "apply now", "job", "jobs", "career", "careers", "home", "homepage"}
+    if r.lower() in bad_titles or len(r) < 4:
+        return (False, "role_title_invalid")
+
+    # company often missing, but if present, reject obvious junk
+    bad_companies = {"linkedin", "indeed", "dice", "ziprecruiter", "glassdoor", "lever", "greenhouse"}
+    if c and c.lower() in bad_companies:
+        return (False, "company_invalid")
+
+    return (True, "ok")
+

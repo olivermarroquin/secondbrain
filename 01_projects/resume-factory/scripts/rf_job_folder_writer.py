@@ -3,6 +3,7 @@ import pathlib
 import re
 import sys
 from dataclasses import dataclass
+from typing import Optional
 from datetime import date
 
 def die(msg, code=2):
@@ -32,6 +33,36 @@ def today_yyyy_mm_dd() -> str:
 def build_app_dir(root: pathlib.Path, ji: JobIntake) -> pathlib.Path:
     return root / "01_projects" / "jobs" / ji.family / ji.company_slug / f"{ji.date_found}_{ji.role_slug}"
 
+
+def find_existing_by_url(root: pathlib.Path, family: str, url: str) -> Optional[pathlib.Path]:
+    """
+    Return the app_dir of an existing job whose tracking/job-meta.json has source==url
+    or whose jd/job-post-url.txt matches url. Scans only within the same family.
+    """
+    base = root / "01_projects" / "jobs" / family
+    if not base.exists():
+        return None
+
+    # First: check job-meta.json source fields
+    for jm in base.glob("**/tracking/job-meta.json"):
+        try:
+            d = json.loads(jm.read_text())
+            if (d.get("source") or "").strip() == url:
+                return jm.parent.parent
+        except Exception:
+            continue
+
+    # Second: check mirror file
+    for up in base.glob("**/jd/job-post-url.txt"):
+        try:
+            if up.read_text().strip() == url:
+                return up.parent.parent
+        except Exception:
+            continue
+
+    return None
+
+
 def write_job_folder(root: pathlib.Path, ji: JobIntake, jd_text: str, dry_run: bool, force: bool):
     # basic validation
     if not valid_snake(ji.company_slug):
@@ -52,6 +83,13 @@ def write_job_folder(root: pathlib.Path, ji: JobIntake, jd_text: str, dry_run: b
     sh_path = tracking_dir / "status-history.md"
     jd_raw  = jd_dir / "jd-raw.txt"
     jd_url  = jd_dir / "job-post-url.txt"
+
+
+    # duplicate-url guard (family-wide)
+    if not force:
+        existing = find_existing_by_url(root, ji.family, ji.source_url)
+        if existing is not None and existing != app_dir:
+            return ("SKIPPED", existing, "duplicate_url")
 
     # idempotency: refuse overwrite unless force
     for p in [jm_path, ar_path, sh_path]:
